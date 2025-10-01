@@ -2,4 +2,27 @@
 <resources>
 
     <style name="Theme.Hoppin_Android_App" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- Splash Screen Theme -->
+    <style name="Theme.App.Starting" parent="Theme.SplashScreen">
+        <!-- Set the splash screen background -->
+        <item name="windowSplashScreenBackground">@color/teal_700</item>
+
+        <!-- Set the splash screen icon (your launcher icon) -->
+        <item name="windowSplashScreenAnimatedIcon">@drawable/hoppin_logo</item>
+        <!-- Use windowSplashScreenAnimatedIcon for static drawables too,
+             it will be centered and sized appropriately.
+             Alternatively, for static drawables you could use:
+             <item name="android:windowBackground">@drawable/your_static_splash_drawable</item>
+             but windowSplashScreenAnimatedIcon is preferred for consistency. -->
+
+        <!-- Set the theme of the Activity that follows your splash screen. -->
+        <item name="postSplashScreenTheme">@style/Theme.Hoppin_Android_App</item>
+
+        <!-- Optional: Customize the icon background color if your icon is non-adaptive
+             and you want a consistent background shape/color behind it. -->
+        <!-- <item name="windowSplashScreenIconBackgroundColor">@color/icon_background_color</item> -->
+
+        <!-- Optional: For Android 12+, brand image at the bottom -->
+        <!-- <item name="android:windowSplashScreenBrandingImage">@drawable/your_branding_image</item> -->
+    </style>
 </resources>
