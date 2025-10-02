@@ -7,16 +7,24 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.unh.hoppin_android_app.ui.theme.Hoppin_Android_AppTheme
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        installSplashScreen()
+        val splash = installSplashScreen()
         super.onCreate(savedInstanceState)
+        var keepOn = true
+        lifecycleScope.launch {
+            kotlinx.coroutines.delay(1000)
+            keepOn = false
+        }
+        splash.setKeepOnScreenCondition { keepOn }
         setContent {
             Hoppin_Android_AppTheme {
                 Surface(
@@ -27,21 +35,8 @@ class MainActivity : ComponentActivity() {
 
                     NavHost(
                         navController = navController,
-                        startDestination = "Splash"
+                        startDestination = "login"
                     ) {
-                        composable("Splash") {
-                            SplashScreen(
-                                logoRes = R.drawable.hoppin_logo, // Make sure ic_launcher is suitable or use a different logo
-                                appName = "Hoppin",
-                                holdMillis = 1000L
-                            ) {
-                                navController.navigate("login") {
-                                    popUpTo("Splash") { inclusive = true }
-                                    launchSingleTop = true
-                                }
-                            }
-                        }
-
                         composable("login") {
                             // Pass the navController if LoginScreen needs to navigate (e.g., after successful login)
                             LoginScreen(navController = navController)
