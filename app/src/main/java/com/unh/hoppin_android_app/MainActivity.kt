@@ -31,9 +31,6 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    LocationTextScreen()
-                    //MapScreen()
-                    /*
                     val navController = rememberNavController()
 
                     NavHost(
@@ -49,7 +46,6 @@ class MainActivity : ComponentActivity() {
                             HomeScreen(navController = navController)
                         }
                     }
-                    */
                 }
             }
         }

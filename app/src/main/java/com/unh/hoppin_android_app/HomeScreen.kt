@@ -25,5 +25,6 @@ fun HomeScreen(navController: NavController) { // Added NavController
     ) {
         Text("Home Screen", style = MaterialTheme.typography.headlineMedium)
         Spacer(modifier = Modifier.height(24.dp))
+        LocationTextScreen()
     }
 }

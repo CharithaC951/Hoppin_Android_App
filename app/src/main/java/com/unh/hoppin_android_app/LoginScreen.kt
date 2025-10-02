@@ -1,5 +1,8 @@
 package com.unh.hoppin_android_app
 
+import android.R.attr.fontFamily
+import android.R.attr.fontStyle
+import android.R.attr.fontWeight
 import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.Image
@@ -86,11 +89,19 @@ private fun SignInUI(onNavigateToCreateAccount: () -> Unit, onLoginSuccess: () -
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = "Login",
+            text = "Hoppin",
             fontSize = 32.sp,
             fontWeight = FontWeight.Bold,
             color = Color.DarkGray,
-            // --- FONT STYLE CHANGE ---
+            fontFamily = FontFamily.Serif,
+            fontStyle = FontStyle.Italic
+        )
+        Spacer(modifier = Modifier.height(48.dp))
+        Text(
+            text = "Login",
+            fontSize = 26.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.DarkGray,
             fontFamily = FontFamily.Serif,
             fontStyle = FontStyle.Italic
         )
@@ -134,6 +145,16 @@ private fun SignInUI(onNavigateToCreateAccount: () -> Unit, onLoginSuccess: () -
         }
 
         Spacer(modifier = Modifier.height(24.dp))
+        Text(
+            text = "Forgot password? Click here to reset",
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.DarkGray,
+            // --- FONT STYLE CHANGE ---
+            fontFamily = FontFamily.Serif,
+            fontStyle = FontStyle.Italic
+        )
+        Spacer(modifier = Modifier.height(48.dp))
         OrSeparator()
         Spacer(modifier = Modifier.height(24.dp))
 
@@ -187,8 +208,18 @@ private fun CreateAccountUI(onNavigateBack: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
+                text = "Welcome to Hoppin",
+                fontSize = 32.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.DarkGray,
+                fontFamily = FontFamily.Serif,
+                fontStyle = FontStyle.Italic
+            )
+            Spacer(modifier = Modifier.height(26.dp))
+
+            Text(
                 text = "Register",
-                fontSize = 28.sp,
+                fontSize = 26.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.DarkGray,
                 // --- FONT STYLE CHANGE ---
