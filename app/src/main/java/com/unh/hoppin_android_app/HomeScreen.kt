@@ -1,5 +1,6 @@
 package com.unh.hoppin_android_app
 
+import AddressAppScreen
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -25,6 +26,6 @@ fun HomeScreen(navController: NavController) { // Added NavController
     ) {
         Text("Home Screen", style = MaterialTheme.typography.headlineMedium)
         Spacer(modifier = Modifier.height(24.dp))
-        LocationTextScreen()
+        AddressAppScreen()
     }
 }
