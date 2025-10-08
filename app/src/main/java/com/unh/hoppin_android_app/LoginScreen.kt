@@ -1,8 +1,5 @@
 package com.unh.hoppin_android_app
 
-import android.R.attr.fontFamily
-import android.R.attr.fontStyle
-import android.R.attr.fontWeight
 import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.Image
@@ -57,8 +54,8 @@ fun LoginScreen(navController: NavController) {
             composable("SignInRoute") {
                 SignInUI(
                     onNavigateToCreateAccount = { authNavController.navigate("CreateAccountRoute") },
-                    onLoginSuccess = {
-                        navController.navigate("Home") {
+                    onLoginSuccess = {userName->
+                        navController.navigate("Home/$userName") {
                             popUpTo("login") { inclusive = true }
                         }
                     }
@@ -75,10 +72,12 @@ fun LoginScreen(navController: NavController) {
 
 
 @Composable
-private fun SignInUI(onNavigateToCreateAccount: () -> Unit, onLoginSuccess: () -> Unit) {
+private fun SignInUI(onNavigateToCreateAccount: () -> Unit, onLoginSuccess: (userName: String) -> Unit) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
+    val auth = FirebaseAuth.getInstance()
+    val db = FirebaseFirestore.getInstance()
     val context = LocalContext.current
 
     Column(
@@ -125,15 +124,33 @@ private fun SignInUI(onNavigateToCreateAccount: () -> Unit, onLoginSuccess: () -
 
                     isLoading = true
 
-                    FirebaseAuth.getInstance().signInWithEmailAndPassword(email.trim(), password.trim())
+                    auth.signInWithEmailAndPassword(email.trim(), password.trim())
                         .addOnCompleteListener { task ->
-                            isLoading = false
                             if (task.isSuccessful) {
-                                Log.d("Firebase", "signInWithEmail:success")
-                                onLoginSuccess()
-                            } else {
+                                val userId = auth.currentUser?.uid
+
+                                if (userId != null) {
+                                    db.collection("users").document(userId).get()
+                                        .addOnSuccessListener { document ->
+                                            isLoading = false
+                                            val userName = document.getString("name") ?: "User"
+                                            Log.d("Firebase", "Login Success. Name: $userName")
+                                            onLoginSuccess(userName)
+                                        }
+                                        .addOnFailureListener { e ->
+                                            isLoading = false
+                                            Log.w("Firestore", "Error getting user document", e)
+                                            onLoginSuccess("User")
+                                        }
+                                } else {
+                                    isLoading = false
+                                    Log.e("Firebase", "Auth success but no user ID.")
+                                    onLoginSuccess("User")
+                                }
+                            }else {
                                 Log.w("Firebase", "signInWithEmail:failure", task.exception)
                                 Toast.makeText(context, "Invalid username or password.", Toast.LENGTH_LONG).show()
+                                onLoginSuccess("User")
                             }
                         }
                 },

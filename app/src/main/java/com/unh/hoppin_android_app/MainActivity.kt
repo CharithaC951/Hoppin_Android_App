@@ -1,6 +1,5 @@
 package com.unh.hoppin_android_app
 
-import AddressAppScreen
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -9,12 +8,17 @@ import androidx.compose.material3.*
 import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.unh.hoppin_android_app.ui.theme.Hoppin_Android_AppTheme
 import kotlinx.coroutines.launch
 
+const val USER_NAME_ARG = "userName"
+
+const val HOME_ROUTE_PATTERN = "Home/{$USER_NAME_ARG}"
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -22,7 +26,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         var keepOn = true
         lifecycleScope.launch {
-            kotlinx.coroutines.delay(1000)
+            kotlinx.coroutines.delay(250)
             keepOn = false
         }
         splash.setKeepOnScreenCondition { keepOn }
@@ -40,12 +44,19 @@ class MainActivity : ComponentActivity() {
                         startDestination = "login"
                     ) {
                         composable("login") {
-                            // Pass the navController if LoginScreen needs to navigate (e.g., after successful login)
                             LoginScreen(navController = navController)
                         }
-                        composable("Home") {
-                            // Pass the navController so HomeScreen can navigate to other places
-                            HomeScreen(navController = navController)
+                        composable(HOME_ROUTE_PATTERN,
+                            arguments = listOf(
+                                navArgument(USER_NAME_ARG) {
+                                    type = NavType.StringType // Specify the expected type
+                                    nullable = false
+                                }
+                            )) { backStackEntry ->
+                            val userName = backStackEntry.arguments?.getString(USER_NAME_ARG)?:"Guest"
+
+                            // Pass the name to your HomeScreen composable
+                            HomeScreen(navController,userName)
                         }
                     }
                 }
