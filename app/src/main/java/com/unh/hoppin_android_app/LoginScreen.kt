@@ -2,6 +2,7 @@
 
 package com.unh.hoppin_android_app
 
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -61,8 +62,8 @@ fun LoginScreen(navController: NavController) {
             composable("SignInRoute") {
                 SignInUI(
                     onNavigateToCreateAccount = { authNavController.navigate("CreateAccountRoute") },
-                    onLoginSuccess = {
-                        navController.navigate("Home") {
+                    onLoginSuccess = {userName->
+                        navController.navigate("Home/$userName") {
                             popUpTo("login") { inclusive = true }
                         }
                     }
@@ -78,12 +79,13 @@ fun LoginScreen(navController: NavController) {
 }
 
 @Composable
-private fun SignInUI(onNavigateToCreateAccount: () -> Unit, onLoginSuccess: () -> Unit) {
+private fun SignInUI(onNavigateToCreateAccount: () -> Unit, onLoginSuccess: (userName: String) -> Unit) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
-    val context = LocalContext.current
     val auth = FirebaseAuth.getInstance()
+    val db = FirebaseFirestore.getInstance()
+    val context = LocalContext.current
 
     val googleSignInLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult(),
@@ -111,13 +113,13 @@ private fun SignInUI(onNavigateToCreateAccount: () -> Unit, onLoginSuccess: () -
                                         "favoritePlaceIds" to emptyList<String>()
                                     )
                                     userRef.set(newUser, SetOptions.merge())
-                                        .addOnSuccessListener { onLoginSuccess() }
+                                        .addOnSuccessListener { onLoginSuccess("User") }
                                         .addOnFailureListener { e ->
                                             isLoading = false
                                             Toast.makeText(context, "Failed to create profile: ${e.message}", Toast.LENGTH_LONG).show()
                                         }
                                 } else {
-                                    onLoginSuccess()
+                                    onLoginSuccess("User")
                                 }
                             }
                         }
@@ -155,12 +157,41 @@ private fun SignInUI(onNavigateToCreateAccount: () -> Unit, onLoginSuccess: () -
         } else {
             Button(
                 onClick = {
-                    if (email.isBlank() || password.isBlank()) { Toast.makeText(context, "Email and password cannot be empty.", Toast.LENGTH_SHORT).show(); return@Button }
+                    if (email.isBlank() || password.isBlank()) {
+                        Toast.makeText(context, "Email and password cannot be empty.", Toast.LENGTH_SHORT).show()
+                        return@Button
+                    }
+
                     isLoading = true
+
                     auth.signInWithEmailAndPassword(email.trim(), password.trim())
                         .addOnCompleteListener { task ->
-                            isLoading = false
-                            if (task.isSuccessful) { onLoginSuccess() } else { Toast.makeText(context, "Invalid username or password.", Toast.LENGTH_LONG).show() }
+                            if (task.isSuccessful) {
+                                val userId = auth.currentUser?.uid
+
+                                if (userId != null) {
+                                    db.collection("users").document(userId).get()
+                                        .addOnSuccessListener { document ->
+                                            isLoading = false
+                                            val userName = document.getString("name") ?: "User"
+                                            Log.d("Firebase", "Login Success. Name: $userName")
+                                            onLoginSuccess(userName)
+                                        }
+                                        .addOnFailureListener { e ->
+                                            isLoading = false
+                                            Log.w("Firestore", "Error getting user document", e)
+                                            onLoginSuccess("User")
+                                        }
+                                } else {
+                                    isLoading = false
+                                    Log.e("Firebase", "Auth success but no user ID.")
+                                    onLoginSuccess("User")
+                                }
+                            }else {
+                                Log.w("Firebase", "signInWithEmail:failure", task.exception)
+                                Toast.makeText(context, "Invalid username or password.", Toast.LENGTH_LONG).show()
+                                onLoginSuccess("User")
+                            }
                         }
                 },
                 modifier = Modifier.fillMaxWidth(),
