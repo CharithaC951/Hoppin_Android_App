@@ -94,6 +94,5 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.0")
 
     implementation("com.google.android.gms:play-services-maps:18.2.0")
-    implementation("com.google.maps.android:maps-compose:3.1.0") // Or latest version
-
+    implementation("com.google.maps.android:maps-compose:3.1.0")
 }

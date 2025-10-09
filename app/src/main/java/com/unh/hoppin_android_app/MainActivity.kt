@@ -8,6 +8,7 @@ import androidx.compose.material3.*
 import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -56,7 +57,7 @@ class MainActivity : ComponentActivity() {
                             val userName = backStackEntry.arguments?.getString(USER_NAME_ARG)?:"Guest"
 
                             // Pass the name to your HomeScreen composable
-                            HomeScreen(navController,userName)
+                            HomeScreen(navController = navController,userName = userName)
                         }
                     }
                 }

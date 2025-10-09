@@ -22,17 +22,39 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import com.google.android.gms.location.LocationServices
 
 @Composable
-fun HomeScreen(navController: NavController, userName: String) {
+fun HomeScreen(navController: NavController,
+               locationViewModel: LocationViewModel = viewModel(),
+               userName: String) {
+    val context = LocalContext.current
+
+    // 1. COLLECT THE STATE: Whenever the ViewModel's StateFlow updates, this triggers recomposition.
+    val locationData by locationViewModel.locationState.collectAsState()
+
+    // Initialize FusedLocationProviderClient once
+    val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
+
+    // 2. KICK OFF THE FETCH: Use LaunchedEffect to call the fetch function ONLY when the Composable first appears.
+    // The key 'Unit' ensures this block runs exactly once.
+    LaunchedEffect(Unit) {
+        locationViewModel.fetchCurrentLocationAndAddress(context, fusedLocationClient)
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -82,8 +104,8 @@ fun HomeScreen(navController: NavController, userName: String) {
                     modifier = Modifier.size(26.dp)
                 )
                 Text(
-                    text = "Address text",
-                    fontSize = 16.sp,
+                    text = locationData.status,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold
                 )
             }
