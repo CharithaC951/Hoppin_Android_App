@@ -1,15 +1,5 @@
 package com.unh.hoppin_android_app
 
-/**
- * Manifest (keep these):
- * <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
- * <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
- *
- * Gradle (module):
- * implementation "com.google.android.gms:play-services-location:21.3.0"
- * implementation "com.google.android.libraries.places:places:3.5.0"
- */
-
 import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
@@ -28,9 +18,15 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -59,8 +55,20 @@ import kotlinx.coroutines.withContext
 import java.util.Locale
 import kotlin.coroutines.resume
 
-/* ---------------- Public entry: keeps your original signature ---------------- */
+val gradientColors = listOf(
+    Color(0xFFFF930F),
+    Color(0xFFFFF95B))
 
+val categories = listOf<Category>(
+    Category(1,"Explore",R.drawable.binoculars),
+    Category(2,"Refresh",R.drawable.hamburger_soda),
+    Category(3,"Entertain",R.drawable.theater_masks),
+    Category(4,"ShopStop",R.drawable.shop),
+    Category(5,"Relax",R.drawable.dorm_room),
+    Category(6,"Wellbeing",R.drawable.hands_brain),
+    Category(7,"Emergency",R.drawable.light_emergency_on),
+    Category(8,"Services",R.drawable.holding_hand_delivery)
+)
 @Composable
 fun HomeScreen(
     navController: NavController,
@@ -76,8 +84,6 @@ fun HomeScreen(
     )
 }
 
-/* ---------------- Implementation (UI layout unchanged) ---------------- */
-
 @Composable
 private fun HomeScreenContent(
     navController: NavController,
@@ -88,7 +94,6 @@ private fun HomeScreenContent(
     val context = LocalContext.current
     val fused = remember { LocationServices.getFusedLocationProviderClient(context) }
 
-    // Keep collecting, even if we no longer show status text (does not change the layout)
     val locationData by locationViewModel.locationState.collectAsState()
 
     // Runtime permission (minimal)
@@ -153,157 +158,174 @@ private fun HomeScreenContent(
         loading = false
     }
 
-    /* ---------------- UI (identical structure to your original) ---------------- */
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+    Box(modifier = Modifier.fillMaxSize()) {
+        Image(
+            painter = painterResource(R.drawable.hoppinbackground), // Placeholder for your background image
+            contentDescription = "Background image",
+            contentScale = ContentScale.Crop, // Scales the image to fill the bounds, cropping if necessary
+            modifier = Modifier.fillMaxSize(),
+            alpha = 0.2f
+        )
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Surface(
-                    shape = CircleShape,
-                    color = Color(0xFFE0E0E0),
-                    modifier = Modifier.size(48.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Person,
-                        contentDescription = "Profile",
-                        tint = Color(0xFF9E9E9E),
-                        modifier = Modifier.padding(8.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-
-                Column {
-                    Text(
-                        text = "Hello $userName",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.Black
-                    )
-                    Text(
-                        text = "Ready to Hoppin ?",
-                        fontSize = 16.sp,
-                        color = Color.Gray
-                    )
-                }
-            }
-
-            // 👇 Only this Text's content is changed to show "street, city"
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(
-                    imageVector = Icons.Default.LocationOn,
-                    contentDescription = "Location",
-                    tint = Color.Black,
-                    modifier = Modifier.size(26.dp)
-                )
-
-                val parts = streetCity?.split(",", limit = 2)?.map { it.trim() }
-
-                Text(
-                    text = when {
-                        parts != null -> listOfNotNull(parts.getOrNull(0), parts.getOrNull(1))
-                            .joinToString("\n") // 👈 single Text with a newline
-                        loading && locationError == null -> "Fetching address…"
-                        locationError != null -> "Unavailable"
-                        else -> "Locating..."
-                    },
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    textAlign = TextAlign.Center,
-                    lineHeight = 14.sp // controls minimal vertical gap
-                )
-            }
-
-
-
-
-        }
-
-        Spacer(modifier = Modifier.height(18.dp))
-
-        Text(
-            modifier = Modifier.fillMaxWidth(),
-            text = "Explore. Travel.\nInspire.",
-            fontSize = 28.sp,
-            fontWeight = FontWeight.ExtraBold,
-            lineHeight = 30.sp,
-            color = Color.Black,
-            textAlign = TextAlign.Center
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        OutlinedTextField(
-            value = "",
-            onValueChange = {  },
-            placeholder = { Text("Search") },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search Icon") },
-            singleLine = true,
-            shape = MaterialTheme.shapes.medium,
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = Color(0xFFF0F0F0),
-                unfocusedContainerColor = Color(0xFFF0F0F0),
-                disabledContainerColor = Color(0xFFF0F0F0),
-                focusedBorderColor = Color.Transparent,
-                unfocusedBorderColor = Color.Transparent,
-            ),
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        // Optional banner if needed (kept same behavior as before if you had one)
-        // if (locationError != null) { ... }  // omitted to keep UI appearance identical
-
-        when {
-            loading -> {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    CircularProgressIndicator()
-                }
-            }
-            nearby?.error != null -> {
-                Text(
-                    text = nearby?.error ?: "Unknown error",
-                    color = MaterialTheme.colorScheme.error,
-                    textAlign = TextAlign.Center
-                )
-            }
-            else -> {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF7F7F7))
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Surface(
+                        shape = CircleShape,
+                        color = Color(0xFFE0E0E0),
+                        modifier = Modifier.size(48.dp)
                     ) {
-                        Text(
-                            text = nearby?.name ?: "No result",
-                            style = MaterialTheme.typography.titleLarge,
-                            textAlign = TextAlign.Center
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = "Profile",
+                            tint = Color.White,
+                            modifier = Modifier.padding(8.dp)
+                                .graphicsLayer(alpha = 0.99f)
+                                .drawWithCache {
+                                    val brush = Brush.linearGradient(gradientColors)
+                                    onDrawWithContent {
+                                        drawContent()
+                                        drawRect(
+                                            brush = brush,
+                                            blendMode = BlendMode.SrcIn
+                                        )
+                                    }
+                                }
                         )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        val bmp = nearby?.bitmap
-                        if (bmp != null) {
-                            Image(
-                                bitmap = bmp.asImageBitmap(),
-                                contentDescription = "Nearby restaurant photo",
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(220.dp)
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    Column {
+                        Text(
+                            text = "Hello $userName",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.Black
+                        )
+                        Text(
+                            text = "Ready to Hoppin ?",
+                            fontSize = 16.sp,
+                            color = Color.Gray
+                        )
+                    }
+                }
+
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        imageVector = Icons.Default.LocationOn,
+                        contentDescription = "Location",
+                        tint = Color.Black,
+                        modifier = Modifier.size(26.dp)
+                    )
+
+                    val parts = streetCity?.split(",", limit = 2)?.map { it.trim() }
+
+                    Text(
+                        text = when {
+                            parts != null -> listOfNotNull(parts.getOrNull(0), parts.getOrNull(1))
+                                .joinToString("\n") // 👈 single Text with a newline
+                            loading && locationError == null -> "Fetching address…"
+                            locationError != null -> "Unavailable"
+                            else -> "Locating..."
+                        },
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 14.sp // controls minimal vertical gap
+                    )
+                }
+
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            Text(
+                modifier = Modifier.fillMaxWidth(),
+                text = "Explore. Travel.\nInspire.",
+                fontSize = 28.sp,
+                fontWeight = FontWeight.ExtraBold,
+                lineHeight = 30.sp,
+                color = Color.Black,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            OutlinedTextField(
+                value = "",
+                onValueChange = { },
+                placeholder = { Text("Search") },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search Icon") },
+                singleLine = true,
+                shape = MaterialTheme.shapes.medium,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = Color(0xFFF0F0F0),
+                    unfocusedContainerColor = Color(0xFFF0F0F0),
+                    disabledContainerColor = Color(0xFFF0F0F0),
+                    focusedBorderColor = Color.Transparent,
+                    unfocusedBorderColor = Color.Transparent,
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            BrowseCategoriesSection(categories)
+            when {
+                loading -> {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                }
+
+                nearby?.error != null -> {
+                    Text(
+                        text = nearby?.error ?: "Unknown error",
+                        color = MaterialTheme.colorScheme.error,
+                        textAlign = TextAlign.Center
+                    )
+                }
+
+                else -> {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFF7F7F7))
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = nearby?.name ?: "No result",
+                                style = MaterialTheme.typography.titleLarge,
+                                textAlign = TextAlign.Center
                             )
-                        } else {
-                            Text("No photo available", style = MaterialTheme.typography.bodyMedium)
+                            Spacer(modifier = Modifier.height(12.dp))
+                            val bmp = nearby?.bitmap
+                            if (bmp != null) {
+                                Image(
+                                    bitmap = bmp.asImageBitmap(),
+                                    contentDescription = "Nearby restaurant photo",
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(220.dp)
+                                )
+                            } else {
+                                Text(
+                                    "No photo available",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
                         }
                     }
                 }
@@ -311,8 +333,6 @@ private fun HomeScreenContent(
         }
     }
 }
-
-/* ---------------- Minimal helpers ---------------- */
 
 @Composable
 private fun rememberLocationPermissionState(): State<Boolean> {
@@ -342,7 +362,6 @@ private fun rememberLocationPermissionState(): State<Boolean> {
     return remember { derivedStateOf { granted } }
 }
 
-/** One fresh update if neither current nor last known location is available */
 @Suppress("MissingPermission")
 private suspend fun awaitOneLocationFix(
     fused: FusedLocationProviderClient
@@ -366,7 +385,6 @@ private suspend fun awaitOneLocationFix(
     }
 }
 
-/** Reverse geocode to "street, city" (graceful fallback to line if missing) */
 private suspend fun reverseGeocodeStreetCity(
     context: android.content.Context,
     latLng: LatLng
