@@ -89,11 +89,23 @@ dependencies {
     implementation("androidx.compose.material3:material3")
 
     // Google Play Services Location (Fused Location Provider)
-    implementation("com.google.android.gms:play-services-location:21.0.1")
+    implementation("com.google.android.gms:play-services-location:21.3.0")
 
     // Lifecycle ViewModel for Compose
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.0")
 
     implementation("com.google.android.gms:play-services-maps:18.2.0")
     implementation("com.google.maps.android:maps-compose:3.1.0")
+
+    // 1. GOOGLE PLACES SDK (for SearchNearbyRequest, FetchPhotoRequest, etc.)
+    implementation("com.google.android.libraries.places:places:3.5.0")
+// 2. GOOGLE MAPS SERVICES (for LatLng and location objects)
+// This is often bundled, but including it ensures LatLng is resolved.
+    implementation("com.google.android.gms:play-services-maps:18.2.0")
+// 3. KOTLIN COROUTINES (for 'suspend' and 'Dispatchers.IO')
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+// 4. LIFECYCLE EXTENSIONS (already present in a Compose project, but good practice)
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
+// Keep all your existing Compose, Navigation, and Core dependencies below this line...
+
 }
