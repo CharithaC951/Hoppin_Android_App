@@ -1,4 +1,3 @@
-// ui/home/SingleRecommendationsCarousel.kt
 package com.unh.hoppin_android_app
 
 import androidx.compose.foundation.Image
@@ -25,7 +24,7 @@ import kotlin.math.roundToInt
 @Composable
 fun RecommendationsBlock(
     ui: RecommendationsUiState,
-    outerHorizontalPadding: Dp = 24.dp // match your screen padding for flush edges
+    outerHorizontalPadding: Dp = 24.dp
 ) {
     Text(
         text = "Recommendations",
@@ -63,7 +62,7 @@ fun RecommendationsBlock(
         items(ui.flatItems) { item ->
             FullWidthRecommendationCard(
                 title = item.title,
-                categoryTitle = item.categoryTitle, // optional to show; see below
+                categoryTitle = item.categoryTitle,
                 distanceMeters = item.distanceMeters,
                 bitmap = item.bitmap,
                 width = cardWidth
@@ -79,16 +78,15 @@ private fun FullWidthRecommendationCard(
     distanceMeters: Double,
     bitmap: android.graphics.Bitmap?,
     width: Dp,
-    imageHeight: Dp = 260.dp // increased height
+    imageHeight: Dp = 260.dp
 ) {
     Card(
         modifier = Modifier.width(width),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        // Title (top). If you also want category as a small label, add it above/beside title.
         Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp)) {
-            // Optional category label (small)
+
             if (categoryTitle.isNotBlank()) {
                 Text(
                     text = categoryTitle,
@@ -106,7 +104,7 @@ private fun FullWidthRecommendationCard(
             )
         }
 
-        // Image underneath + distance chip top-right
+
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -147,7 +145,7 @@ private fun FullWidthRecommendationCard(
 @Composable
 private fun DistanceChip(meters: Double, modifier: Modifier = Modifier) {
     val (value, unit, text) = if (meters >= 1000) {
-        val km = (meters / 100.0).roundToInt() / 10.0 // 1 decimal
+        val km = (meters / 100.0).roundToInt() / 10.0
         Triple(km, "km", "$km km")
     } else {
         val m = meters.roundToInt()
