@@ -86,7 +86,7 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
-    implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material3:material3:1.3.1")
 
     // Google Play Services Location (Fused Location Provider)
     implementation("com.google.android.gms:play-services-location:21.3.0")
