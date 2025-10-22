@@ -200,12 +200,18 @@ private fun HomeScreenContent(
                 }
 
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        imageVector = Icons.Default.LocationOn,
-                        contentDescription = "Location",
-                        tint = Color.Black,
+                    IconButton(
+                        onClick = {
+                            navController.navigate("map")
+                        },
                         modifier = Modifier.size(26.dp)
-                    )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.LocationOn,
+                            contentDescription = "Open Map",
+                            tint = Color.Black
+                        )
+                    }
 
                     val parts = streetCity?.split(",", limit = 2)?.map { it.trim() }
 
