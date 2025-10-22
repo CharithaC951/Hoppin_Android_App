@@ -7,6 +7,7 @@ import android.os.Looper
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -162,7 +163,9 @@ private fun HomeScreenContent(
                     Surface(
                         shape = CircleShape,
                         color = Color(0xFFE0E0E0),
-                        modifier = Modifier.size(48.dp)
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clickable { navController.navigate("gamification") }
                     ) {
                         Icon(
                             imageVector = Icons.Default.Person,

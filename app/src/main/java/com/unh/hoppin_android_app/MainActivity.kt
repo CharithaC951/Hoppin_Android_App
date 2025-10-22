@@ -97,6 +97,9 @@ class MainActivity : ComponentActivity() {
                                         navController = navController
                                     )
                                 }
+                                composable("gamification") {
+                                    GamificationScreen(navController = navController)
+                                }
                             }
                         }
                     } else {
@@ -126,6 +129,9 @@ class MainActivity : ComponentActivity() {
                                     mapsApiKey = MAPS_API_KEY,
                                     navController = navController
                                 )
+                            }
+                            composable("gamification") {
+                                GamificationScreen(navController = navController)
                             }
                         }
                     }
