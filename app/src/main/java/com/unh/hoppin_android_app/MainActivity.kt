@@ -29,6 +29,8 @@ class MainActivity : ComponentActivity() {
     // Hardcode your Places API key here for now
     private val PLACES_API_KEY = "AIzaSyDiNZujsy2lzuMOmacqsm4yrcWg2RFqobw"
 
+    private val MAPS_API_KEY = "AIzaSyBZ5BHvRW4P9pLWKwGQh_WiyfMOQKfLONA"
+
     override fun onCreate(savedInstanceState: Bundle?) {
         val splash = installSplashScreen()
         super.onCreate(savedInstanceState)
@@ -89,6 +91,12 @@ class MainActivity : ComponentActivity() {
                                         placesApiKey = PLACES_API_KEY
                                     )
                                 }
+                                composable("map") {
+                                    MapScreen(
+                                        mapsApiKey = MAPS_API_KEY,
+                                        navController = navController
+                                    )
+                                }
                             }
                         }
                     } else {
@@ -111,6 +119,12 @@ class MainActivity : ComponentActivity() {
                                     navController = navController,
                                     userName = userName,
                                     placesApiKey = PLACES_API_KEY
+                                )
+                            }
+                            composable("map") {
+                                MapScreen(
+                                    mapsApiKey = MAPS_API_KEY,
+                                    navController = navController
                                 )
                             }
                         }
