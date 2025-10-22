@@ -54,34 +54,43 @@ fun GamificationScreen(
             Spacer(Modifier.height(12.dp))
 
             // Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+            // --- Centered Profile Header ---
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(64.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFFECEFF1)),
-                    contentAlignment = Alignment.Center
+                Surface(
+                    shape = CircleShape,
+                    color = Color(0xFFE0E0E0),
+                    modifier = Modifier.size(80.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Badge,
-                        contentDescription = null,
-                        tint = Color(0xFF37474F)
+                        contentDescription = "Profile Badge",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .padding(16.dp)
                     )
                 }
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(userName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    Text("Keep exploring to earn more!", color = Color.Gray, style = MaterialTheme.typography.bodyMedium)
-                }
-                Icon(
-                    imageVector = Icons.Default.Map,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = userName,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black
+                )
+                Text(
+                    text = "Keep exploring to earn more!",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.Gray
                 )
             }
+
+
 
             Spacer(Modifier.height(16.dp))
 
