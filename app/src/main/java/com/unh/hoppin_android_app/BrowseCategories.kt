@@ -37,8 +37,8 @@ fun CategoryItem(category: Category, modifier: Modifier = Modifier) {
             modifier = Modifier
                 .size(80.dp)
                 .background(
-                    color = Color.Transparent, // Light purple background
-                    shape = RoundedCornerShape(12.dp) // Rounded corners
+                    color = Color.Transparent,
+                    shape = RoundedCornerShape(12.dp)
                 ),
             contentAlignment = Alignment.Center
         ) {
@@ -76,7 +76,6 @@ fun BrowseCategoriesSection(categories: List<Category>) {
         // Horizontal Scrolling List
         LazyRow(
             modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp) // Spacing between cards
         ) {
             items(categories) { category ->
