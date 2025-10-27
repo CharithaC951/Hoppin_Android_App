@@ -2,9 +2,10 @@
 
 package com.unh.hoppin_android_app
 
-import android.Manifest
+import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -23,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
@@ -35,26 +37,24 @@ import coil.compose.AsyncImage
 fun TripCardScreen(
     onBack: () -> Unit = {}
 ) {
+    val context = LocalContext.current
+
     var tagline by remember { mutableStateOf(TextFieldValue("")) }
     var pickedImageUri by remember { mutableStateOf<Uri?>(null) }
 
     // Photo Picker (Android 13+)
     val photoPickerLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia()
-    ) { uri ->
-        if (uri != null) pickedImageUri = uri
-    }
+    ) { uri -> if (uri != null) pickedImageUri = uri }
 
-    // Legacy: request READ_EXTERNAL_STORAGE and then open GetContent
+    // Legacy: permission + GetContent
     var hasStoragePermission by remember { mutableStateOf(Build.VERSION.SDK_INT >= 33) }
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted -> hasStoragePermission = granted }
     val getContentLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
-    ) { uri ->
-        if (uri != null) pickedImageUri = uri
-    }
+    ) { uri -> if (uri != null) pickedImageUri = uri }
 
     fun launchPicker() {
         if (Build.VERSION.SDK_INT >= 33) {
@@ -74,6 +74,18 @@ fun TripCardScreen(
         if (Build.VERSION.SDK_INT < 33 && hasStoragePermission) {
             getContentLauncher.launch("image/*")
         }
+    }
+
+    fun share() {
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = if (pickedImageUri != null) "image/*" else "text/plain"
+            putExtra(Intent.EXTRA_TEXT, tagline.text.takeIf { it.isNotBlank() })
+            pickedImageUri?.let { uri ->
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+        }
+        context.startActivity(Intent.createChooser(send, "Share via"))
     }
 
     Scaffold(
@@ -100,7 +112,6 @@ fun TripCardScreen(
             )
             Spacer(Modifier.height(10.dp))
 
-            // Clickable image area
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -112,7 +123,7 @@ fun TripCardScreen(
             ) {
                 if (pickedImageUri == null) {
                     Image(
-                        painter = painterResource(R.drawable.hoppin_logo),
+                        painter = painterResource(R.drawable.hoppinbackground),
                         contentDescription = "Placeholder",
                         modifier = Modifier.size(96.dp)
                     )
@@ -141,8 +152,8 @@ fun TripCardScreen(
                     shape = RoundedCornerShape(12.dp)
                 )
                 Spacer(Modifier.width(8.dp))
-                FilledTonalIconButton(
-                    onClick = { },
+                IconButton(
+                    onClick = { share() },
                     modifier = Modifier.size(44.dp),
                     shape = RoundedCornerShape(12.dp)
                 ) {
