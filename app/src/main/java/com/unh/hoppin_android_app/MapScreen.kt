@@ -3,7 +3,17 @@ package com.unh.hoppin_android_app
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.FlowRowScope
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.LocalDining
+import androidx.compose.material.icons.filled.LocalHospital
+import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -11,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
 import androidx.navigation.NavController
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
@@ -29,14 +40,29 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 
+// -----------------------------
+//  Public Data Types
+// -----------------------------
+enum class ExploreType { RESTAURANTS, ENTERTAINMENT, TOURISM, SHOPPING, EMERGENCY }
+
+data class PlacePin(
+    val position: LatLng,
+    val title: String,
+    val subtitle: String? = null,
+    val photo: Bitmap? = null
+)
+
+// -----------------------------
+//  Main Composable
+// -----------------------------
 @OptIn(ExperimentalPermissionsApi::class)
-@SuppressLint("MissingPermission") // All location calls are gated by permission checks
+@SuppressLint("MissingPermission")
 @Composable
 fun MapScreen(
     mapsApiKey: String,
     navController: NavController
 ) {
-    // ---- Permissions ----
+    // Permissions
     val locationPermissions = rememberMultiplePermissionsState(
         permissions = listOf(
             android.Manifest.permission.ACCESS_FINE_LOCATION,
@@ -49,7 +75,7 @@ fun MapScreen(
         }
     }
 
-    // ---- State / Services ----
+    // State / Services
     val context = LocalContext.current
     val fused = remember { LocationServices.getFusedLocationProviderClient(context) }
     var userLatLng by remember { mutableStateOf<LatLng?>(null) }
@@ -62,22 +88,19 @@ fun MapScreen(
         position = CameraPosition.fromLatLngZoom(defaultCenter, 14f)
     }
 
-    // Explore selection (Restaurants / Entertainment / Tourism)
     var selected by remember { mutableStateOf(ExploreType.RESTAURANTS) }
 
-    // ---- Acquire device location once permissions are granted ----
+    // Acquire device location
     LaunchedEffect(locationPermissions.allPermissionsGranted) {
         if (!locationPermissions.allPermissionsGranted) return@LaunchedEffect
-
         val current = fused.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null).await()
             ?: fused.lastLocation.await()
-
         val center = if (current != null) LatLng(current.latitude, current.longitude) else defaultCenter
         userLatLng = center
         cameraPositionState.position = CameraPosition.fromLatLngZoom(center, 15f)
     }
 
-    // ---- Fetch nearby places when selection or location changes ----
+    // Fetch nearby places whenever selection or location changes
     LaunchedEffect(selected, userLatLng) {
         val center = userLatLng ?: return@LaunchedEffect
         loading = true
@@ -88,8 +111,8 @@ fun MapScreen(
                 apiKey = mapsApiKey,
                 center = center,
                 exploreType = selected,
-                radiusMeters = 5_000.0,   // 5 km
-                maxCount = 10             // Top 10
+                radiusMeters = 20.0 * 1609.344, // 20 miles ≈ 32,187 m
+                maxCount = 10
             )
         } catch (e: Exception) {
             e.printStackTrace()
@@ -100,7 +123,7 @@ fun MapScreen(
         }
     }
 
-    // ---- UI ----
+    // UI
     Box(Modifier.fillMaxSize()) {
         val mapProps = MapProperties(
             isMyLocationEnabled = locationPermissions.allPermissionsGranted
@@ -108,7 +131,7 @@ fun MapScreen(
         val uiSettings = MapUiSettings(
             compassEnabled = true,
             myLocationButtonEnabled = locationPermissions.allPermissionsGranted,
-            zoomControlsEnabled = false
+            zoomControlsEnabled = true // show native zoom controls
         )
 
         GoogleMap(
@@ -117,11 +140,9 @@ fun MapScreen(
             properties = mapProps,
             uiSettings = uiSettings
         ) {
-            // Optional explicit user marker; blue dot is shown by My Location layer anyway
             userLatLng?.let {
                 Marker(state = MarkerState(position = it), title = "You are here")
             }
-
             pins.forEach { pin ->
                 Marker(
                     state = MarkerState(position = pin.position),
@@ -131,13 +152,32 @@ fun MapScreen(
             }
         }
 
-        // Top overlay: filter chips
+        // Wrapping, elevated chip bar
         ExploreBar(
             selected = selected,
             onSelect = { selected = it },
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .padding(12.dp)
+                .padding(horizontal = 12.dp, vertical = 10.dp)
+        )
+
+        // Custom zoom control (no CameraUpdateFactory required)
+        ZoomControls(
+            onZoomIn = {
+                val pos = cameraPositionState.position
+                val target = pos.target
+                val newZoom = (pos.zoom + 1f).coerceAtMost(21f)
+                cameraPositionState.position = CameraPosition.fromLatLngZoom(target, newZoom)
+            },
+            onZoomOut = {
+                val pos = cameraPositionState.position
+                val target = pos.target
+                val newZoom = (pos.zoom - 1f).coerceAtLeast(2f)
+                cameraPositionState.position = CameraPosition.fromLatLngZoom(target, newZoom)
+            },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = 12.dp, bottom = 24.dp)
         )
 
         if (loading) {
@@ -166,8 +206,9 @@ fun MapScreen(
     }
 }
 
-/* --------------------------- UI: Explore Bar --------------------------- */
-
+// -----------------------------
+//  Explore Bar UI
+// -----------------------------
 @Composable
 private fun ExploreBar(
     selected: ExploreType,
@@ -177,45 +218,98 @@ private fun ExploreBar(
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(20.dp),
-        color = Color(0xCCFFFFFF) // translucent white
+        color = Color(0xCCFFFFFF),
+        tonalElevation = 6.dp,
+        shadowElevation = 2.dp
     ) {
-        Row(
-            modifier = Modifier.padding(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        FlowRow(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            FilterChip(
+            ExploreChip(
+                label = "Restaurants",
                 selected = selected == ExploreType.RESTAURANTS,
-                onClick = { onSelect(ExploreType.RESTAURANTS) },
-                label = { Text("Restaurants") }
+                icon = { Icon(Icons.Filled.LocalDining, contentDescription = null) },
+                onClick = { onSelect(ExploreType.RESTAURANTS) }
             )
-            FilterChip(
+            ExploreChip(
+                label = "Entertainment",
                 selected = selected == ExploreType.ENTERTAINMENT,
-                onClick = { onSelect(ExploreType.ENTERTAINMENT) },
-                label = { Text("Entertainment") }
+                icon = { Icon(Icons.Filled.Movie, contentDescription = null) },
+                onClick = { onSelect(ExploreType.ENTERTAINMENT) }
             )
-            FilterChip(
+            ExploreChip(
+                label = "Tourism",
                 selected = selected == ExploreType.TOURISM,
-                onClick = { onSelect(ExploreType.TOURISM) },
-                label = { Text("Tourism") }
+                icon = { Icon(Icons.Filled.Map, contentDescription = null) },
+                onClick = { onSelect(ExploreType.TOURISM) }
+            )
+            ExploreChip(
+                label = "Shopping",
+                selected = selected == ExploreType.SHOPPING,
+                icon = { Icon(Icons.Filled.ShoppingBag, contentDescription = null) },
+                onClick = { onSelect(ExploreType.SHOPPING) }
+            )
+            ExploreChip(
+                label = "Emergency",
+                selected = selected == ExploreType.EMERGENCY,
+                icon = { Icon(Icons.Filled.LocalHospital, contentDescription = null) },
+                onClick = { onSelect(ExploreType.EMERGENCY) }
             )
         }
     }
 }
 
-/* --------------------------- Data & Fetch --------------------------- */
-
-private enum class ExploreType {
-    RESTAURANTS, ENTERTAINMENT, TOURISM
+@Composable
+private fun FlowRowScope.ExploreChip(
+    label: String,
+    selected: Boolean,
+    icon: @Composable (() -> Unit)? = null,
+    onClick: () -> Unit
+) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = { Text(label) },
+        leadingIcon = icon?.let { ic -> { ic() } },
+        colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+        )
+    )
 }
 
-private data class PlacePin(
-    val position: LatLng,
-    val title: String,
-    val subtitle: String? = null,
-    val photo: Bitmap? = null // reserved for custom markers
-)
+// -----------------------------
+//  Zoom Controls
+// -----------------------------
+@Composable
+private fun ZoomControls(
+    onZoomIn: () -> Unit,
+    onZoomOut: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        tonalElevation = 6.dp,
+        shadowElevation = 2.dp,
+        color = Color(0xCCFFFFFF)
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            IconButton(onClick = onZoomIn) { Icon(Icons.Filled.Add, contentDescription = "Zoom in") }
+            Divider(modifier = Modifier.width(40.dp))
+            IconButton(onClick = onZoomOut) { Icon(Icons.Filled.Remove, contentDescription = "Zoom out") }
+        }
+    }
+}
 
+// -----------------------------
+//  Fetch Logic
+// -----------------------------
 private fun getPlacesClient(context: android.content.Context, apiKey: String): PlacesClient {
     if (!Places.isInitialized()) {
         Places.initialize(context.applicationContext, apiKey)
@@ -233,10 +327,28 @@ private suspend fun fetchPlacesByExploreType(
 ): List<PlacePin> = withContext(Dispatchers.IO) {
     val client = getPlacesClient(context, apiKey)
 
-    val types = when (exploreType) {
-        ExploreType.RESTAURANTS   -> listOf("restaurant")
-        ExploreType.ENTERTAINMENT -> listOf("movie_theater")
-        ExploreType.TOURISM       -> listOf("tourist_attraction")
+    // Expanded type groups per category
+    val types: List<String> = when (exploreType) {
+        // Restaurants: restaurants, cafes, bars (incl. pubs/coffee shops)
+        ExploreType.RESTAURANTS -> listOf(
+            "restaurant", "cafe", "coffee_shop", "bar", "pub"
+        )
+        // Entertainment: movie theaters, nightlife, play areas/arcades/bowling
+        ExploreType.ENTERTAINMENT -> listOf(
+            "movie_theater", "night_club", "bar", "amusement_center", "bowling_alley", "video_arcade", "playground"
+        )
+        // Tourism: beaches, local attractions, parks/gardens/museums
+        ExploreType.TOURISM -> listOf(
+            "tourist_attraction", "park", "national_park", "beach", "botanical_garden", "museum", "art_gallery"
+        )
+        // Shopping: malls + groceries + general retail
+        ExploreType.SHOPPING -> listOf(
+            "shopping_mall", "supermarket", "grocery_store", "department_store", "convenience_store", "market"
+        )
+        // Emergency: fire, police, hospital
+        ExploreType.EMERGENCY -> listOf(
+            "fire_station", "police", "hospital"
+        )
     }
 
     val fields = listOf(
