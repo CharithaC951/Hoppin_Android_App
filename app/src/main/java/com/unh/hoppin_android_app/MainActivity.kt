@@ -57,6 +57,14 @@ class MainActivity : ComponentActivity() {
 
                     val showBottomBar = currentRoute != "login" // hide bar on login screen
 
+                    UserAutoStreakHandler(navToHome = { userName ->
+                        navController.navigate("Home/$userName") {
+                            popUpTo("login") { inclusive = true }
+                            launchSingleTop = true
+                        }
+                    })
+
+
                     if (showBottomBar) {
                         // ✅ Scaffold only for screens that need bottom navigation
                         Scaffold(

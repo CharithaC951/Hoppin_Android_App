@@ -1,28 +1,25 @@
 package com.unh.hoppin_android_app
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.LocalDining
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.lifecycle.viewmodel.compose.viewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -31,15 +28,23 @@ fun GamificationScreen(
     userName: String = "Raghav",
     xp: Int = 420,
     level: Int = 4,
-    levelProgress: Float = 0.35f
+    levelProgress: Float = 0.35f,
+    viewModel: GamificationStreakViewModel = viewModel()
 ) {
+    val streakState by viewModel.streak.collectAsState()
+
+    // Ensure auto check-in if the screen is opened directly (defensive; idempotent)
+    LaunchedEffect(Unit) {
+        viewModel.ensureTodayCheckIn()
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Gamification") },
                 navigationIcon = {
                     IconButton(onClick = { navController.navigateUp() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.Default.Badge, contentDescription = "Back")
                     }
                 }
             )
@@ -53,7 +58,6 @@ fun GamificationScreen(
         ) {
             Spacer(Modifier.height(12.dp))
 
-            // Header
             // --- Centered Profile Header ---
             Column(
                 modifier = Modifier
@@ -70,13 +74,10 @@ fun GamificationScreen(
                         imageVector = Icons.Default.Badge,
                         contentDescription = "Profile Badge",
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier
-                            .padding(16.dp)
+                        modifier = Modifier.padding(16.dp)
                     )
                 }
-
                 Spacer(modifier = Modifier.height(12.dp))
-
                 Text(
                     text = userName,
                     style = MaterialTheme.typography.titleLarge,
@@ -89,8 +90,6 @@ fun GamificationScreen(
                     color = Color.Gray
                 )
             }
-
-
 
             Spacer(Modifier.height(16.dp))
 
@@ -108,18 +107,42 @@ fun GamificationScreen(
                     Text("$xp XP • ${((1f - levelProgress) * 100).toInt()}% to next level", color = Color.Gray)
                 }
             }
+
             Spacer(Modifier.height(16.dp))
 
-// Streaks
-            Text("Streak Badges", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            // --- Streaks (realtime) ---
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Streak Badges", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                // No button needed – auto check-in handled by VM
+                AssistChip(
+                    onClick = { /* disabled */ },
+                    enabled = false,
+                    label = { Text("Auto") }
+                )
+            }
+
             Spacer(Modifier.height(8.dp))
+
+            val targets = listOf(1, 3, 7, 14, 30)
             StreakRow(
-                achieved = setOf(1, 3),               // demo: achieved streaks
-                streaks = listOf(1, 3, 7, 14, 30)
+                achieved = targets.filter { it <= streakState.currentStreak }.toSet(),
+                streaks = targets
             )
+
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Current: ${streakState.currentStreak} • Best: ${streakState.bestStreak}",
+                style = MaterialTheme.typography.labelMedium,
+                color = Color.Gray
+            )
+
             Spacer(Modifier.height(20.dp))
 
-            // Themed
+            // --- Themed Badges (sample) ---
             Text("Themed Badges", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(8.dp))
 
@@ -152,12 +175,12 @@ fun GamificationScreen(
             }
 
             Spacer(Modifier.height(8.dp))
-
-
         }
-
     }
 }
+
+// ===== Your helpers from the original screen =====
+
 @Composable
 private fun StreakRow(
     achieved: Set<Int>,
@@ -181,6 +204,7 @@ private fun StreakRow(
         }
     }
 }
+
 private data class BadgeItem(
     val title: String,
     val rule: String,
@@ -214,5 +238,3 @@ private fun BadgeCircle(
         Text(item.rule, style = MaterialTheme.typography.labelSmall, color = Color.Gray, maxLines = 2)
     }
 }
-
-
