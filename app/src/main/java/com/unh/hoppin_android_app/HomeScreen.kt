@@ -43,6 +43,7 @@ import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import java.util.Locale
 import kotlin.coroutines.resume
+import androidx.compose.material.icons.filled.SmartToy
 
 val gradientColors = listOf(
     Color(0xFFFF930F),
@@ -273,6 +274,21 @@ private fun HomeScreenContent(
             RecommendationsBlock(ui = recoUi)
             Spacer(modifier = Modifier.height(20.dp))
 
+        }
+        FloatingActionButton(
+            onClick = {
+                navController.navigate("chat")
+            },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp),
+            containerColor = Color(0xFF6B4D9C)
+        ) {
+            Icon(
+                imageVector = Icons.Default.SmartToy,
+                contentDescription = "Open Chatbot",
+                tint = Color.White
+            )
         }
     }
 }

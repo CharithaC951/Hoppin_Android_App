@@ -1,12 +1,16 @@
 import org.gradle.kotlin.dsl.implementation
-
+import java.util.Properties
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     id("com.google.gms.google-services")
 }
-
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localProperties.load(localPropertiesFile.inputStream())
+}
 android {
     namespace = "com.unh.hoppin_android_app"
     compileSdk = 36
@@ -19,6 +23,7 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "MAPS_API_KEY", "\"${localProperties.getProperty("MAPS_API_KEY")}\"")
     }
 
     buildTypes {
@@ -39,6 +44,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -106,6 +112,5 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 // 4. LIFECYCLE EXTENSIONS (already present in a Compose project, but good practice)
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
-// Keep all your existing Compose, Navigation, and Core dependencies below this line...
-
+    implementation("androidx.compose.material:material:1.6.7")
 }

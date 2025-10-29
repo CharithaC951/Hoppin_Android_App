@@ -18,15 +18,17 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.google.android.libraries.places.api.Places
+import com.unh.hoppin_android_app.chat.ChatScreen
 import com.unh.hoppin_android_app.ui.theme.Hoppin_Android_AppTheme
 import kotlinx.coroutines.launch
+
 
 const val USER_NAME_ARG = "userName"
 const val HOME_ROUTE_PATTERN = "Home/{$USER_NAME_ARG}"
 
 class MainActivity : ComponentActivity() {
 
-    // Hardcode your Places API key here for now
     private val PLACES_API_KEY = "AIzaSyDiNZujsy2lzuMOmacqsm4yrcWg2RFqobw"
 
     private val MAPS_API_KEY = "AIzaSyBZ5BHvRW4P9pLWKwGQh_WiyfMOQKfLONA"
@@ -100,6 +102,9 @@ class MainActivity : ComponentActivity() {
                                 composable("gamification") {
                                     GamificationScreen(navController = navController)
                                 }
+                                composable("chat") {
+                                    ChatScreen(onNavigateBack = { navController.popBackStack() })
+                                }
                             }
                         }
                     } else {
@@ -132,6 +137,9 @@ class MainActivity : ComponentActivity() {
                             }
                             composable("gamification") {
                                 GamificationScreen(navController = navController)
+                            }
+                            composable("chat") {
+                                ChatScreen(onNavigateBack = { navController.popBackStack() })
                             }
                         }
                     }
