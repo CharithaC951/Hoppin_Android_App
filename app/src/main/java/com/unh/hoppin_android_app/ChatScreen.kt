@@ -56,8 +56,7 @@ fun ChatScreen(
                 backgroundColor = Color.White,
                 elevation = 4.dp
             )
-        },
-        bottomBar = { AppBottomNavigation() }
+        }
     ) { paddingValues ->
         Column(
             modifier = Modifier
@@ -214,25 +213,6 @@ fun QuickReplies(replies: List<String>, onReplyClicked: (String) -> Unit) {
                 Text(text = reply, color = Color.Black)
             }
 
-        }
-    }
-}
-
-@Composable
-fun AppBottomNavigation() {
-    var selectedItem by remember { mutableStateOf(0) }
-    val items = listOf("Home", "Favorites", "Notifications", "Settings")
-    val icons = listOf(Icons.Default.Home, Icons.Default.FavoriteBorder, Icons.Default.NotificationsNone, Icons.Default.Settings)
-
-    BottomNavigation(backgroundColor = Color.White, contentColor = DarkPurple) {
-        items.forEachIndexed { index, screen ->
-            BottomNavigationItem(
-                icon = { Icon(icons[index], contentDescription = screen) },
-                selected = selectedItem == index,
-                onClick = { selectedItem = index },
-                selectedContentColor = DarkPurple,
-                unselectedContentColor = Color.Gray
-            )
         }
     }
 }

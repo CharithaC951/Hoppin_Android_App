@@ -115,6 +115,14 @@ class MainActivity : ComponentActivity() {
                                 composable("chat") {
                                     ChatScreen(onNavigateBack = { navController.popBackStack() })
                                 }
+                                composable(
+                                    route = "sub/{catId}",
+                                    arguments = listOf(navArgument("catId") { type = NavType.IntType })
+                                ) { backStackEntry ->
+                                    val catId = backStackEntry.arguments!!.getInt("catId")
+                                    SubCategoriesScreen(navController = navController, catId = catId)
+                                }
+
                             }
                         }
                     } else {
@@ -151,6 +159,14 @@ class MainActivity : ComponentActivity() {
                             composable("chat") {
                                 ChatScreen(onNavigateBack = { navController.popBackStack() })
                             }
+                            composable(
+                                route = "sub/{catId}",
+                                arguments = listOf(navArgument("catId") { type = NavType.IntType })
+                            ) { backStackEntry ->
+                                val catId = backStackEntry.arguments!!.getInt("catId")
+                                SubCategoriesScreen(navController = navController, catId = catId)
+                            }
+
                         }
                     }
                 }

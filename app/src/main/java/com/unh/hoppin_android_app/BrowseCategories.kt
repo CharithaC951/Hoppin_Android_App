@@ -27,13 +27,13 @@ data class Category(
     val image: Int
 )
 
-/**
- * Composable for a single category card (icon placeholder + title).
- */
 @Composable
 fun CategoryItem(navController: NavController, category: Category, modifier: Modifier = Modifier) {
     Column(
-        modifier = modifier.width(80.dp),
+        modifier = modifier.width(80.dp)
+            .clickable{
+                navController.navigate("sub/${category.id}")
+            },
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(
