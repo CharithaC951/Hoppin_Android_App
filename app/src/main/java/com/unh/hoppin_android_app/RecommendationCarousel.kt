@@ -46,11 +46,14 @@ fun RecommendationsBlock(
             return
         }
         ui.flatItems.isEmpty() -> {
-            Text("No recommendations found.",
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+            Text(
+                "No recommendations found.",
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            )
             return
         }
     }
+
 
     val screenWidthDp = LocalConfiguration.current.screenWidthDp.dp
     val cardWidth = screenWidthDp - (outerHorizontalPadding * 2) // full-bleed inside padding
