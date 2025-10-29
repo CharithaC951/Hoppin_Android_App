@@ -49,16 +49,7 @@ val gradientColors = listOf(
     Color(0xFFFF930F),
     Color(0xFFFFF95B))
 
-val categories = listOf(
-    Category(1,"Explore",R.drawable.binoculars),
-    Category(2,"Refresh",R.drawable.hamburger_soda),
-    Category(3,"Entertain",R.drawable.theater_masks),
-    Category(4,"ShopStop",R.drawable.shop),
-    Category(5,"Relax",R.drawable.dorm_room),
-    Category(6,"Wellbeing",R.drawable.hands_brain),
-    Category(7,"Emergency",R.drawable.light_emergency_on),
-    Category(8,"Services",R.drawable.holding_hand_delivery)
-)
+val categories = CategoriesRepository.allCategories()
 
 @Composable
 fun HomeScreen(

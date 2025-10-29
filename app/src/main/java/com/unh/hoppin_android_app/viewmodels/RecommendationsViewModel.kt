@@ -14,6 +14,7 @@ import com.google.android.libraries.places.api.model.Place
 import com.google.android.libraries.places.api.net.FetchPhotoRequest
 import com.google.android.libraries.places.api.net.PlacesClient
 import com.google.android.libraries.places.api.net.SearchNearbyRequest
+import com.unh.hoppin_android_app.CategoriesRepository
 import com.unh.hoppin_android_app.Category
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,6 +22,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import kotlin.collections.flatten
 import kotlin.collections.map
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -93,10 +95,7 @@ class RecommendationViewModel : ViewModel() {
                     CircularBounds.newInstance(center, radiusMeters)
 
                 // Union of Place.Type across your UI categories
-                val unionTypes: List<String> = categories
-                    .mapNotNull { categoryToTypes[it.title] }
-                    .flatten()
-                    .distinct()
+                val unionTypes: List<String> = CategoriesRepository.unionTypesFor(categories)
 
                 val req = SearchNearbyRequest.builder(restriction, fields)
                     .setIncludedTypes(unionTypes)
@@ -201,11 +200,8 @@ class RecommendationViewModel : ViewModel() {
         }
     }
 
-    private fun matches(cat: Category, p: Place): Boolean {
-        val needed = categoryToTypes[cat.title] ?: return false
-        val types = p.types ?: return false
-        return types.any { it.name.lowercase() in needed }
-    }
+    private fun matches(cat: Category, p: Place): Boolean =
+        CategoriesRepository.placeMatchesCategory(cat.id, p.types)
     private suspend fun buildItem(
         client: PlacesClient,
         place: Place,
@@ -249,70 +245,4 @@ class RecommendationViewModel : ViewModel() {
         val c = 2 * atan2(sqrt(a), sqrt(1 - a))
         return R * c
     }
-
-    private val categoryToTypes: Map<String, List<String>> = mapOf(
-        // 1. Explore – outdoor attractions and points of interest
-        "Explore" to listOf(
-            "tourist_attraction",
-            "museum",
-            "art_gallery",
-            "park",
-        ),
-
-        // 2. Refresh – food, drinks, hangouts
-        "Refresh" to listOf(
-            "restaurant",
-            "bar",
-            "cafe",
-            "bakery"
-        ),
-
-        // 3. Entertain – leisure and social activities
-        "Entertain" to listOf(
-            "movie_theater",
-            "night_club",
-            "bowling_alley",
-            "casino"
-        ),
-
-        // 4. ShopStop – shopping and retail
-        "ShopStop" to listOf(
-            "shopping_mall",
-            "clothing_store",
-            "department_store",
-            "store",
-            "supermarket"
-        ),
-
-        // 5. Relax – accommodation and rest
-        "Relax" to listOf(
-            "spa",
-            "lodging",
-            "campground"
-        ),
-
-        // 6. Wellbeing – health and personal care
-        "Wellbeing" to listOf(
-            "gym",
-            "pharmacy",
-            "doctor",
-            "beauty_salon"
-        ),
-
-        // 7. Emergency – urgent or public services
-        "Emergency" to listOf(
-            "hospital",
-            "police",
-            "fire_station"
-        ),
-
-        // 8. Services – everyday support services
-        "Services" to listOf(
-            "post_office",
-            "bank",
-            "atm",
-            "gas_station",
-            "car_repair"
-        )
-    )
 }
