@@ -15,7 +15,7 @@ import java.time.format.DateTimeFormatter
 data class StreakState(
     val currentStreak: Int = 0,
     val bestStreak: Int = 0,
-    val lastCheckInDate: String? = null // yyyy-MM-dd (UTC)
+    val lastCheckInDate: String? = null
 )
 
 class GamificationStreakViewModel : ViewModel() {
@@ -62,11 +62,6 @@ class GamificationStreakViewModel : ViewModel() {
         viewModelScope.launch { flow.collect { _streak.value = it } }
     }
 
-    /** Idempotent UTC daily check-in:
-     *  - already today → no change
-     *  - last was yesterday → ++current, update best
-     *  - else → reset to 1
-     */
     fun dailyCheckIn(onResult: (before: StreakState, after: StreakState) -> Unit = { _, _ -> }) {
         viewModelScope.launch {
             db.runTransaction { tx ->

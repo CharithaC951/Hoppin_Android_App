@@ -24,6 +24,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 
+import androidx.compose.runtime.*
+import androidx.compose.material3.*
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.unh.hoppin_android_app.viewmodels.GamificationStreakViewModel
+import kotlinx.coroutines.launch
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GamificationScreen(
@@ -31,8 +37,13 @@ fun GamificationScreen(
     userName: String = "Raghav",
     xp: Int = 420,
     level: Int = 4,
-    levelProgress: Float = 0.35f
+    levelProgress: Float = 0.35f,
+    viewModel: GamificationStreakViewModel = viewModel()
 ) {
+    val streakState by viewModel.streak.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -43,7 +54,8 @@ fun GamificationScreen(
                     }
                 }
             )
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { inner ->
         Column(
             modifier = Modifier
@@ -53,48 +65,8 @@ fun GamificationScreen(
         ) {
             Spacer(Modifier.height(12.dp))
 
-            // Header
-            // --- Centered Profile Header ---
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Surface(
-                    shape = CircleShape,
-                    color = Color(0xFFE0E0E0),
-                    modifier = Modifier.size(80.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Badge,
-                        contentDescription = "Profile Badge",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier
-                            .padding(16.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Text(
-                    text = userName,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.Black
-                )
-                Text(
-                    text = "Keep exploring to earn more!",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.Gray
-                )
-            }
-
-
-
             Spacer(Modifier.height(16.dp))
 
-            // XP / Level
             Card(
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -108,56 +80,61 @@ fun GamificationScreen(
                     Text("$xp XP • ${((1f - levelProgress) * 100).toInt()}% to next level", color = Color.Gray)
                 }
             }
+
             Spacer(Modifier.height(16.dp))
 
-// Streaks
-            Text("Streak Badges", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(8.dp))
-            StreakRow(
-                achieved = setOf(1, 3),               // demo: achieved streaks
-                streaks = listOf(1, 3, 7, 14, 30)
-            )
-            Spacer(Modifier.height(20.dp))
-
-            // Themed
-            Text("Themed Badges", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(8.dp))
-
-            val themed = remember {
-                listOf(
-                    BadgeItem("Explorer", "Visit/save 5, 20, 50 places", Icons.Default.Explore, achieved = true),
-                    BadgeItem("Foodie", "Review 10 restaurants", Icons.Default.LocalDining, achieved = true),
-                    BadgeItem("Culture Buff", "Visit 3 museums", Icons.Default.Badge, achieved = false),
-                    BadgeItem("Photographer", "Upload 10 photos", Icons.Default.CameraAlt, achieved = false),
-                    BadgeItem("Itinerary Maker", "Create 3 custom trips", Icons.Default.Map, achieved = false),
-                    BadgeItem("Aficionado", "Become a local expert", Icons.Default.Badge, achieved = false)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Streak Badges", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                AssistChip(
+                    onClick = {
+                        viewModel.dailyCheckIn { before, after ->
+                            scope.launch {
+                                when {
+                                    before.lastCheckInDate == after.lastCheckInDate -> {
+                                        snackbarHostState.showSnackbar("Already checked in today ✅")
+                                    }
+                                    after.currentStreak == 1 && before.currentStreak != 1 -> {
+                                        snackbarHostState.showSnackbar("Streak started! 🔥")
+                                    }
+                                    after.currentStreak > before.currentStreak -> {
+                                        snackbarHostState.showSnackbar("Streak increased to ${after.currentStreak} 🔥")
+                                    }
+                                    else -> {
+                                        snackbarHostState.showSnackbar("Check-in saved")
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    label = { Text("Daily check-in") }
                 )
             }
 
-            themed.chunked(3).forEach { row ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    row.forEach { item ->
-                        BadgeCircle(
-                            item = item,
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(vertical = 10.dp)
-                        )
-                    }
-                    repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
-                }
-            }
-
             Spacer(Modifier.height(8.dp))
 
+            val targets = listOf(1, 3, 7, 14, 30)
+            StreakRow(
+                achieved = targets.filter { it <= streakState.currentStreak }.toSet(),
+                streaks = targets
+            )
+
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Current: ${streakState.currentStreak} • Best: ${streakState.bestStreak}",
+                style = MaterialTheme.typography.labelMedium,
+                color = Color.Gray
+            )
+
+            Spacer(Modifier.height(20.dp))
 
         }
-
     }
 }
+
 @Composable
 private fun StreakRow(
     achieved: Set<Int>,
