@@ -20,7 +20,6 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.unh.hoppin_android_app.chat.ChatScreen
 import com.google.android.libraries.places.api.Places
-import com.google.firebase.auth.FirebaseAuth
 import com.unh.hoppin_android_app.ui.theme.Hoppin_Android_AppTheme
 import kotlinx.coroutines.launch
 
@@ -45,7 +44,7 @@ class MainActivity : ComponentActivity() {
             keepOn = false
         }
         splash.setKeepOnScreenCondition { keepOn }
-        FirebaseAuth.getInstance().signInAnonymously()
+
         setContent {
             Hoppin_Android_AppTheme {
                 Surface(
@@ -57,6 +56,14 @@ class MainActivity : ComponentActivity() {
                     val currentRoute = currentBackStackEntry?.destination?.route
 
                     val showBottomBar = currentRoute != "login" // hide bar on login screen
+
+                    UserAutoStreakHandler(navToHome = { userName ->
+                        navController.navigate("Home/$userName") {
+                            popUpTo("login") { inclusive = true }
+                            launchSingleTop = true
+                        }
+                    })
+
 
                     if (showBottomBar) {
                         // ✅ Scaffold only for screens that need bottom navigation
