@@ -113,13 +113,13 @@ private fun SignInUI(onNavigateToCreateAccount: () -> Unit, onLoginSuccess: (use
                                         "favoritePlaceIds" to emptyList<String>()
                                     )
                                     userRef.set(newUser, SetOptions.merge())
-                                        .addOnSuccessListener { onLoginSuccess("User") }
+                                        .addOnSuccessListener { onLoginSuccess(firebaseUser.displayName!!) }
                                         .addOnFailureListener { e ->
                                             isLoading = false
                                             Toast.makeText(context, "Failed to create profile: ${e.message}", Toast.LENGTH_LONG).show()
                                         }
                                 } else {
-                                    onLoginSuccess("User")
+                                    onLoginSuccess(firebaseUser.displayName!!)
                                 }
                             }
                         }

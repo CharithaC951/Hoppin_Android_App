@@ -82,21 +82,17 @@ private fun HomeScreenContent(
     val context = LocalContext.current
     val fused = remember { LocationServices.getFusedLocationProviderClient(context) }
 
-    // Runtime permission (minimal)
     val hasLocationPermission by rememberLocationPermissionState()
 
-    // Device location & address (street + city only)
     var deviceLatLng by remember { mutableStateOf<LatLng?>(null) }
     var streetCity by remember { mutableStateOf<String?>(null) }
     var locationError by remember { mutableStateOf<String?>(null) }
 
-    // Nearby restaurant UI state
     var loading by remember { mutableStateOf(true) }
 
     val recoVm: RecommendationViewModel = viewModel()
     val recoUi by recoVm.ui.collectAsState()
 
-    // Get location once permission is granted
     LaunchedEffect(hasLocationPermission) {
         if (!hasLocationPermission) return@LaunchedEffect
         loading = true
@@ -116,7 +112,6 @@ private fun HomeScreenContent(
             }
 
             if (latLng == null) {
-                // Fallback only if we truly couldn't get a fix
                 locationError = "Location unavailable"
                 deviceLatLng = LatLng(41.3083, -72.9279) // New Haven fallback
                 streetCity = "New Haven"
@@ -135,18 +130,22 @@ private fun HomeScreenContent(
         }
     }
 
-    // Fire Places with the SAME coordinates (radius = 1 km)
     LaunchedEffect(deviceLatLng) {
         val center = deviceLatLng ?: return@LaunchedEffect
         val recoCats = categories.filter { it.id !in setOf(7, 8) }
-        recoVm.load(context, placesApiKey, center, recoCats)
+        recoVm.load(
+            context = context,
+            apiKey = placesApiKey,      // explicitly named
+            center = center,
+            categories = recoCats
+        )
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Image(
-            painter = painterResource(R.drawable.hoppinbackground), // Placeholder for your background image
+            painter = painterResource(R.drawable.hoppinbackground),
             contentDescription = "Background image",
-            contentScale = ContentScale.Crop, // Scales the image to fill the bounds, cropping if necessary
+            contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize(),
             alpha = 0.2f
         )
@@ -222,7 +221,7 @@ private fun HomeScreenContent(
                     Text(
                         text = when {
                             parts != null -> listOfNotNull(parts.getOrNull(0), parts.getOrNull(1))
-                                .joinToString("\n") // 👈 single Text with a newline
+                                .joinToString("\n")
                             loading && locationError == null -> "Fetching address…"
                             locationError != null -> "Unavailable"
                             else -> "Locating..."
@@ -230,7 +229,7 @@ private fun HomeScreenContent(
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         textAlign = TextAlign.Center,
-                        lineHeight = 14.sp // controls minimal vertical gap
+                        lineHeight = 14.sp
                     )
                 }
 
@@ -269,7 +268,7 @@ private fun HomeScreenContent(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            BrowseCategoriesSection(categories)
+            BrowseCategoriesSection(navController = navController, categories = categories)
             Spacer(modifier = Modifier.height(20.dp))
             RecommendationsBlock(ui = recoUi)
             Spacer(modifier = Modifier.height(20.dp))

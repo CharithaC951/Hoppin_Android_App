@@ -2,6 +2,7 @@ package com.unh.hoppin_android_app
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -17,6 +18,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
+import androidx.navigation.compose.rememberNavController
 
 data class Category(
     val id: Int,
@@ -28,9 +31,9 @@ data class Category(
  * Composable for a single category card (icon placeholder + title).
  */
 @Composable
-fun CategoryItem(category: Category, modifier: Modifier = Modifier) {
+fun CategoryItem(navController: NavController, category: Category, modifier: Modifier = Modifier) {
     Column(
-        modifier = modifier.width(80.dp), // Fixed width for consistent card size
+        modifier = modifier.width(80.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(
@@ -61,9 +64,8 @@ fun CategoryItem(category: Category, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun BrowseCategoriesSection(categories: List<Category>) {
+fun BrowseCategoriesSection(navController: NavController, categories: List<Category>) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        // Header Text
         Text(
             text = "Categories",
             style = MaterialTheme.typography.headlineSmall,
@@ -73,13 +75,12 @@ fun BrowseCategoriesSection(categories: List<Category>) {
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
         )
 
-        // Horizontal Scrolling List
         LazyRow(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp) // Spacing between cards
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             items(categories) { category ->
-                CategoryItem(category = category)
+                CategoryItem(navController = navController,category = category)
             }
         }
     }
@@ -99,9 +100,9 @@ fun BrowseCategoriesPreview() {
         Category(6, "Title 6",R.drawable.binoculars)
     )
 
+    val navController = rememberNavController()
     Column(modifier = Modifier.fillMaxSize().background(Color.White)) {
-        // You would typically place this section inside a larger screen composable
         Spacer(modifier = Modifier.height(20.dp))
-        BrowseCategoriesSection(categories = mockCategories)
+        BrowseCategoriesSection(navController = navController, categories = mockCategories)
     }
 }
