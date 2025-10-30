@@ -26,10 +26,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val conversationFlow = mapOf(
         "START" to ConversationStep(
             botMessages = listOf("Welcome !!!", "Ready to Hoppin?", "where you wanna Hoppin next"),
-            replies = listOf("Food and drinks", "Travel", "Hotels")
+            replies = listOf( "Explore", "Refresh", "Relax")
         ),
-        "Food and drinks" to ConversationStep(
-            botMessages = listOf("What are you looking under Food and Drinks?"),
+        "Refresh" to ConversationStep(
+            botMessages = listOf("What are you looking under Refresh"),
             replies = listOf("Restaurants", "Cafes", "Bar & Breweries")
         ),
         "Restaurants" to ConversationStep(
