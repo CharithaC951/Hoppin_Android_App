@@ -47,10 +47,25 @@ import androidx.compose.material.icons.filled.SmartToy
 
 val gradientColors = listOf(
     Color(0xFFFF930F),
-    Color(0xFFFFF95B))
+    Color(0xFFFFF95B)
+)
 
+/**
+ * Application categories loaded from the CategoriesRepository. Kept as a top-level val
+ * so the HomeScreen UI can reference the canonical set used elsewhere in the app.
+ */
 val categories = CategoriesRepository.allCategories()
 
+/**
+ * Public entry point for the Home screen.
+ *
+ * This small wrapper exists so callers (NavHost) can pass navigation, username,
+ * and the Places API key explicitly.
+ *
+ * @param navController Navigation controller used to route to other screens.
+ * @param userName Display name used in the greeting.
+ * @param placesApiKey API key string forwarded to recommendation loader.
+ */
 @Composable
 fun HomeScreen(
     navController: NavController,
@@ -64,6 +79,21 @@ fun HomeScreen(
     )
 }
 
+/**
+ * The main Home screen content.
+ *
+ * Responsibilities:
+ *  - Request and display device location (with fallback to a default)
+ *  - Show a top greeting row with profile and quick map action
+ *  - Provide a search field (UI only)
+ *  - Render category row and recommendations block
+ *  - Display a floating chat action button
+ *
+ * Notes:
+ *  - Location permission handling is simplified inside rememberLocationPermissionState().
+ *  - Reverse geocoding runs off the main thread.
+ *  - RecommendationViewModel is invoked when a device location is available.
+ */
 @Composable
 private fun HomeScreenContent(
     navController: NavController,
@@ -71,19 +101,29 @@ private fun HomeScreenContent(
     placesApiKey: String
 ) {
     val context = LocalContext.current
+
+    // FusedLocationProviderClient used to fetch device location.
     val fused = remember { LocationServices.getFusedLocationProviderClient(context) }
 
     val hasLocationPermission by rememberLocationPermissionState()
 
-    var deviceLatLng by remember { mutableStateOf<LatLng?>(null) }
-    var streetCity by remember { mutableStateOf<String?>(null) }
-    var locationError by remember { mutableStateOf<String?>(null) }
-
-    var loading by remember { mutableStateOf(true) }
+    // Local UI state
+    var deviceLatLng by remember { mutableStateOf<LatLng?>(null) }   // device coordinates
+    var streetCity by remember { mutableStateOf<String?>(null) }     // human-readable street/city
+    var locationError by remember { mutableStateOf<String?>(null) }  // error text for debugging / display
+    var loading by remember { mutableStateOf(true) }                 // whether location fetch is in progress
 
     val recoVm: RecommendationViewModel = viewModel()
     val recoUi by recoVm.ui.collectAsState()
 
+    /**
+     * When permission becomes available, try to fetch the current device location.
+     * This block:
+     *  - Attempts getCurrentLocation()
+     *  - Falls back to lastLocation or a single accurate location fix if needed
+     *  - Reverse-geocodes to a street/city string for display
+     *  - On failure, provides a sane New Haven fallback
+     */
     LaunchedEffect(hasLocationPermission) {
         if (!hasLocationPermission) return@LaunchedEffect
         loading = true
@@ -97,6 +137,7 @@ private fun HomeScreenContent(
             val latLng = when {
                 current != null -> LatLng(current.latitude, current.longitude)
                 else -> {
+                    // try last known location, otherwise request a single high-accuracy update
                     fused.lastLocation.await()?.let { LatLng(it.latitude, it.longitude) }
                         ?: awaitOneLocationFix(fused)
                 }
@@ -107,26 +148,35 @@ private fun HomeScreenContent(
                 deviceLatLng = LatLng(41.3083, -72.9279) // New Haven fallback
                 streetCity = "New Haven"
             } else {
+                // Got a location: keep it and attempt reverse-geocoding
                 deviceLatLng = latLng
                 streetCity = reverseGeocodeStreetCity(context, latLng) ?: "Locating..."
             }
         } catch (e: SecurityException) {
+            // Permission missing or revoked while running
             locationError = "Location permission not granted"
             deviceLatLng = LatLng(41.3083, -72.9279)
             streetCity = "New Haven"
         } catch (e: Exception) {
+            // Generic failure (network, geocoder, etc.)
             locationError = "Location error"
             deviceLatLng = LatLng(41.3083, -72.9279)
             streetCity = "New Haven"
+        } finally {
+            loading = false
         }
     }
 
+    /**
+     * When we have a deviceLatLng, trigger the RecommendationViewModel to load
+     * recommendation tiles based on the categories we want (exclude emergency/services here).
+     */
     LaunchedEffect(deviceLatLng) {
         val center = deviceLatLng ?: return@LaunchedEffect
-        val recoCats = categories.filter { it.id !in setOf(7, 8) }
+        val recoCats = categories.filter { it.id !in setOf(7, 8) } // omit Emergency & Services
         recoVm.load(
             context = context,
-            apiKey = placesApiKey,      // explicitly named
+            apiKey = placesApiKey,
             center = center,
             categories = recoCats
         )
@@ -162,7 +212,8 @@ private fun HomeScreenContent(
                             imageVector = Icons.Default.Person,
                             contentDescription = "Profile",
                             tint = Color.White,
-                            modifier = Modifier.padding(8.dp)
+                            modifier = Modifier
+                                .padding(8.dp)
                                 .graphicsLayer(alpha = 0.99f)
                                 .drawWithCache {
                                     val brush = Brush.linearGradient(gradientColors)
@@ -192,7 +243,6 @@ private fun HomeScreenContent(
                         )
                     }
                 }
-
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     IconButton(
                         onClick = {
@@ -223,7 +273,6 @@ private fun HomeScreenContent(
                         lineHeight = 14.sp
                     )
                 }
-
             }
 
             Spacer(modifier = Modifier.height(18.dp))
@@ -263,7 +312,6 @@ private fun HomeScreenContent(
             Spacer(modifier = Modifier.height(20.dp))
             RecommendationsBlock(ui = recoUi)
             Spacer(modifier = Modifier.height(20.dp))
-
         }
         FloatingActionButton(
             onClick = {
@@ -283,6 +331,16 @@ private fun HomeScreenContent(
     }
 }
 
+/**
+ * Small helper that tracks whether location permission is granted.
+ *
+ * Implementation details:
+ *  - Uses ActivityResult launcher to request ACCESS_FINE/COARSE if needed.
+ *  - Returns a derived [State<Boolean>] that updates when the result changes.
+ *
+ * Note: This is intentionally simple — production apps may want a more robust
+ * permission UX (explainers, permanently denied flows, settings link, etc.).
+ */
 @Composable
 private fun rememberLocationPermissionState(): State<Boolean> {
     val ctx = LocalContext.current
@@ -311,6 +369,15 @@ private fun rememberLocationPermissionState(): State<Boolean> {
     return remember { derivedStateOf { granted } }
 }
 
+/**
+ * Waits for a single high-accuracy location fix by registering a one-shot listener.
+ *
+ * This uses suspendCancellableCoroutine to bridge the callback-based Location API
+ * with coroutines and ensures we clean up listeners on cancellation.
+ *
+ * @param fused FusedLocationProviderClient used to request updates.
+ * @return The LatLng of the first location result, or null if none arrived.
+ */
 @Suppress("MissingPermission")
 private suspend fun awaitOneLocationFix(
     fused: FusedLocationProviderClient
@@ -334,6 +401,15 @@ private suspend fun awaitOneLocationFix(
     }
 }
 
+/**
+ * Perform a reverse-geocode lookup (street + city) using Android's Geocoder on an IO dispatcher.
+ *
+ * If Geocoder isn't present or the lookup fails, this function returns null.
+ *
+ * @param context Application context for the Geocoder.
+ * @param latLng Coordinates to reverse geocode.
+ * @return A compact "street, city" string or null on failure.
+ */
 private suspend fun reverseGeocodeStreetCity(
     context: android.content.Context,
     latLng: LatLng

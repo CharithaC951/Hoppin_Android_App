@@ -32,6 +32,21 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 
+/**
+ * TripCardScreen
+ *
+ * Screen for creating a “Trip Card” — a visual card that includes:
+ *  - A selected photo (from gallery or picker)
+ *  - A tagline or comment
+ *  - A share button to share the image/text externally
+ *
+ * Features:
+ *  • Supports both Android 13+ Photo Picker (secure)
+ *  • Fallback for legacy (pre-Android 13) with READ_EXTERNAL_STORAGE permission
+ *  • Shares text and image using system share sheet
+ *
+ * @param onBack Callback when back button is pressed (used by navigation).
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TripCardScreen(
@@ -42,12 +57,11 @@ fun TripCardScreen(
     var tagline by remember { mutableStateOf(TextFieldValue("")) }
     var pickedImageUri by remember { mutableStateOf<Uri?>(null) }
 
-    // Photo Picker (Android 13+)
+    // --- Photo Picker (Android 13+ API 33+) ---
     val photoPickerLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia()
     ) { uri -> if (uri != null) pickedImageUri = uri }
 
-    // Legacy: permission + GetContent
     var hasStoragePermission by remember { mutableStateOf(Build.VERSION.SDK_INT >= 33) }
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -56,12 +70,19 @@ fun TripCardScreen(
         ActivityResultContracts.GetContent()
     ) { uri -> if (uri != null) pickedImageUri = uri }
 
+    /**
+     * Launches the appropriate image picker depending on Android version:
+     *  - For Android 13+: uses the secure Photo Picker
+     *  - For older devices: requests READ_EXTERNAL_STORAGE (if needed) and uses GetContent
+     */
     fun launchPicker() {
         if (Build.VERSION.SDK_INT >= 33) {
+            // Use new Photo Picker (Android 13+)
             photoPickerLauncher.launch(
                 PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
             )
         } else {
+            // Legacy path — check permission first
             if (!hasStoragePermission) {
                 permissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
             } else {
@@ -70,12 +91,19 @@ fun TripCardScreen(
         }
     }
 
+    /**
+     * Automatically triggers the legacy picker once permission is granted (pre-Android 13 only)
+     */
     LaunchedEffect(hasStoragePermission) {
         if (Build.VERSION.SDK_INT < 33 && hasStoragePermission) {
             getContentLauncher.launch("image/*")
         }
     }
 
+    /**
+     * Shares the selected image (if any) and tagline text using system share sheet.
+     * Handles both text-only and image+text sharing.
+     */
     fun share() {
         val send = Intent(Intent.ACTION_SEND).apply {
             type = if (pickedImageUri != null) "image/*" else "text/plain"
@@ -99,19 +127,21 @@ fun TripCardScreen(
                 }
             )
         }
-    ) { inner ->
+    ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(inner)
+                .padding(innerPadding)
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
             Text(
-                "Place name",
+                text = "Place name",
                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
             )
+
             Spacer(Modifier.height(10.dp))
 
+            // --- Image Picker Area ---
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -122,12 +152,14 @@ fun TripCardScreen(
                 contentAlignment = Alignment.Center
             ) {
                 if (pickedImageUri == null) {
+                    // Show placeholder image when no photo selected
                     Image(
                         painter = painterResource(R.drawable.hoppinbackground),
                         contentDescription = "Placeholder",
                         modifier = Modifier.size(96.dp)
                     )
                 } else {
+                    // Show selected image
                     AsyncImage(
                         model = pickedImageUri,
                         contentDescription = "Selected photo",
@@ -139,6 +171,7 @@ fun TripCardScreen(
 
             Spacer(Modifier.height(12.dp))
 
+            // --- Tagline Input + Share Button Row ---
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -152,6 +185,8 @@ fun TripCardScreen(
                     shape = RoundedCornerShape(12.dp)
                 )
                 Spacer(Modifier.width(8.dp))
+
+                // Share button (sends text and/or image)
                 IconButton(
                     onClick = { share() },
                     modifier = Modifier.size(44.dp),
@@ -164,6 +199,10 @@ fun TripCardScreen(
     }
 }
 
+/**
+ * Preview for TripCardScreen
+ * - Displays a static view of the composable without running logic
+ */
 @Preview(showBackground = true)
 @Composable
 private fun TripCardPreview() {

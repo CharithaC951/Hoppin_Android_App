@@ -22,20 +22,20 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
-import kotlin.collections.flatten
-import kotlin.collections.map
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.sqrt
 
+/** Represents a single recommended place item. */
 data class RecommendationItem(
     val title: String,
     val bitmap: Bitmap?,
     val distanceMeters: Double
 )
 
+/** Same as RecommendationItem, but also includes the category name it belongs to. */
 data class RecommendationItemWithCategory(
     val categoryTitle: String,
     val title: String,
@@ -43,11 +43,13 @@ data class RecommendationItemWithCategory(
     val distanceMeters: Double
 )
 
+/** Groups several RecommendationItems under a single Category. */
 data class RecommendationSection(
     val category: Category,
     val items: List<RecommendationItem>
 )
 
+/** Represents the entire UI state for recommendations. */
 data class RecommendationsUiState(
     val loading: Boolean = false,
     val sections: List<RecommendationSection> = emptyList(),
@@ -57,11 +59,25 @@ data class RecommendationsUiState(
 
 class RecommendationViewModel : ViewModel() {
 
+    // MutableStateFlow for UI state (used by Compose to observe updates)
     private val _ui = MutableStateFlow(RecommendationsUiState())
     val ui: StateFlow<RecommendationsUiState> = _ui.asStateFlow()
 
+    // Stores the most recent list of all fetched places
     private var lastAll: List<Place> = emptyList()
 
+    /**
+     * Fetches nearby recommendations based on user location and categories.
+     *
+     * @param context Android context (required for Places SDK)
+     * @param center User's current location (LatLng)
+     * @param categories List of categories to search (e.g. restaurants, cafes)
+     * @param radiusMeters Search radius in meters
+     * @param maxResults Maximum total places to retrieve (limited by API)
+     * @param perCategory Limit of places shown per category
+     * @param apiKey Optional API key for initializing Places SDK
+     * @param fetchThumbnails Whether to fetch image thumbnails for places
+     */
     fun load(
         context: Context,
         center: LatLng,
@@ -72,16 +88,20 @@ class RecommendationViewModel : ViewModel() {
         apiKey: String? = null,
         fetchThumbnails: Boolean = true
     ) {
+        // Cap max results between 1–20 as per Places API limitations
         val max = maxResults.coerceIn(1, 20)
 
+        // Mark UI as loading
         _ui.value = _ui.value.copy(loading = true, error = null)
 
+        // Launch the data-fetching task in background (IO thread)
         viewModelScope.launch(Dispatchers.IO) {
             try {
+                // Initialize the Places SDK if needed
                 ensurePlacesInitialized(context, apiKey)
                 val client: PlacesClient = Places.createClient(context)
 
-                // Fields to retrieve
+                // Fields to be retrieved for each place
                 val fields: List<Place.Field> = listOf(
                     Place.Field.ID,
                     Place.Field.NAME,
@@ -90,41 +110,44 @@ class RecommendationViewModel : ViewModel() {
                     Place.Field.PHOTO_METADATAS
                 )
 
-                // Search bounds
-                val restriction: LocationRestriction =
-                    CircularBounds.newInstance(center, radiusMeters)
+                // Define the circular search boundary
+                val restriction: LocationRestriction = CircularBounds.newInstance(center, radiusMeters)
 
-                // Union of Place.Type across your UI categories
+                // Merge all desired Place types across categories
                 val unionTypes: List<String> = CategoriesRepository.unionTypesFor(categories)
 
+                // Build the search request
                 val req = SearchNearbyRequest.builder(restriction, fields)
                     .setIncludedTypes(unionTypes)
                     .setRankPreference(SearchNearbyRequest.RankPreference.POPULARITY)
                     .setMaxResultCount(max)
                     .build()
 
-
+                // Execute API call
                 val resp = client.searchNearby(req).await()
                 val allPlaces: List<Place> = resp.places ?: emptyList()
                 lastAll = allPlaces
 
-                // Build sections (use loops so we can call suspend photo fetch safely)
                 val sections = mutableListOf<RecommendationSection>()
                 for (cat in categories) {
                     val items = mutableListOf<RecommendationItem>()
                     var taken = 0
+
+                    // Loop through all places and check if they match this category
                     for (place in allPlaces) {
                         if (!matches(cat, place)) continue
                         val item = buildItem(client, place, center, fetchThumbnails)
                         if (item != null) {
                             items += item
                             taken++
-                            if (taken >= perCategory) break
+                            if (taken >= perCategory) break // Limit per category
                         }
                     }
+
                     if (items.isNotEmpty()) sections += RecommendationSection(cat, items)
                 }
 
+                // Flatten all sections for easier list display
                 val flatItems = sections.flatMap { sec ->
                     sec.items.map { it ->
                         RecommendationItemWithCategory(
@@ -136,6 +159,7 @@ class RecommendationViewModel : ViewModel() {
                     }
                 }
 
+                // Update UI state (success)
                 _ui.value = RecommendationsUiState(
                     loading = false,
                     sections = sections,
@@ -144,6 +168,7 @@ class RecommendationViewModel : ViewModel() {
                 )
 
             } catch (t: Throwable) {
+                // Handle exceptions gracefully
                 Log.e("RecommendationVM", "load() failed", t)
                 _ui.value = RecommendationsUiState(
                     loading = false,
@@ -154,6 +179,10 @@ class RecommendationViewModel : ViewModel() {
         }
     }
 
+    /**
+     * Builds recommendation sections from previously fetched data (`lastAll`),
+     * avoiding new network calls. Used for local filtering or sorting.
+     */
     fun deriveLocally(
         center: LatLng,
         categories: List<Category>,
@@ -162,6 +191,7 @@ class RecommendationViewModel : ViewModel() {
         if (lastAll.isEmpty()) return
         viewModelScope.launch(Dispatchers.IO) {
             val sections = mutableListOf<RecommendationSection>()
+
             for (cat in categories) {
                 val items = mutableListOf<RecommendationItem>()
                 var taken = 0
@@ -191,6 +221,9 @@ class RecommendationViewModel : ViewModel() {
         }
     }
 
+    /**
+     * Ensures the Places SDK is initialized before making any API calls.
+     */
     private fun ensurePlacesInitialized(context: Context, apiKey: String?) {
         if (!Places.isInitialized()) {
             require(!apiKey.isNullOrBlank()) {
@@ -200,8 +233,14 @@ class RecommendationViewModel : ViewModel() {
         }
     }
 
+    /** Returns true if a given place belongs to the given category. */
     private fun matches(cat: Category, p: Place): Boolean =
         CategoriesRepository.placeMatchesCategory(cat.id, p.types)
+
+    /**
+     * Converts a Place object into a RecommendationItem.
+     * Optionally fetches a thumbnail image if available.
+     */
     private suspend fun buildItem(
         client: PlacesClient,
         place: Place,
@@ -210,15 +249,19 @@ class RecommendationViewModel : ViewModel() {
     ): RecommendationItem? {
         val title: String = place.name ?: return null
         val ll = place.latLng ?: return null
+
+        // Calculate distance between current location and place
         val distance = haversine(center.latitude, center.longitude, ll.latitude, ll.longitude)
 
+        // Attempt to fetch thumbnail image from Places API
         val bmp: Bitmap? = if (fetchThumb) {
             val meta: PhotoMetadata? = place.photoMetadatas?.firstOrNull()
             if (meta != null) {
                 runCatching {
                     client.fetchPhoto(
                         FetchPhotoRequest.builder(meta)
-                            .setMaxWidth(640).setMaxHeight(360) // small thumbnail for cards
+                            .setMaxWidth(640)
+                            .setMaxHeight(360) // Reasonable thumbnail size
                             .build()
                     ).await().bitmap
                 }.getOrNull()
@@ -228,6 +271,9 @@ class RecommendationViewModel : ViewModel() {
         return RecommendationItem(title = title, bitmap = bmp, distanceMeters = distance)
     }
 
+    /**
+     * Creates an offline recommendation item (no network call or image fetching).
+     */
     private fun offlineItem(place: Place, center: LatLng): RecommendationItem? {
         val title: String = place.name ?: return null
         val ll = place.latLng ?: return null
@@ -235,8 +281,12 @@ class RecommendationViewModel : ViewModel() {
         return RecommendationItem(title = title, bitmap = null, distanceMeters = distance)
     }
 
+    /**
+     * Calculates distance between two coordinates using the Haversine formula.
+     * @return Distance in meters.
+     */
     private fun haversine(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
-        val R = 6371000.0
+        val R = 6371000.0 // Earth radius in meters
         val dLat = Math.toRadians(lat2 - lat1)
         val dLon = Math.toRadians(lon2 - lon1)
         val a = sin(dLat / 2).pow(2.0) +

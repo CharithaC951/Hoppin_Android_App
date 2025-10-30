@@ -21,6 +21,22 @@ import androidx.compose.ui.unit.sp
 import com.unh.hoppin_android_app.viewmodels.RecommendationsUiState
 import kotlin.math.roundToInt
 
+/**
+ * RecommendationsBlock
+ *
+ * High-level composable that renders the "Recommendations" section used on the Home screen.
+ *
+ * Behavior:
+ *  - Shows a header ("Recommendations")
+ *  - Handles loading / error / empty states
+ *  - Renders a horizontally scrolling list of recommendation cards where each card is sized
+ *    to be full-width relative to the screen (minus outer padding), producing a "peek" style
+ *    carousel when used inside a LazyRow.
+ *
+ * @param ui The UI state object produced by the RecommendationViewModel.
+ * @param outerHorizontalPadding Padding applied around the list in the parent layout; used
+ *        to compute an effective card width so cards appear full-bleed inside that padding.
+ */
 @Composable
 fun RecommendationsBlock(
     ui: RecommendationsUiState,
@@ -34,6 +50,8 @@ fun RecommendationsBlock(
         color = Color.Black,
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
     )
+
+    // Simple state handling: loading, error, empty
     when {
         ui.loading -> {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
@@ -54,10 +72,11 @@ fun RecommendationsBlock(
         }
     }
 
-
+    // Compute card width to make a "full-width card" inside the parent's horizontal padding
     val screenWidthDp = LocalConfiguration.current.screenWidthDp.dp
-    val cardWidth = screenWidthDp - (outerHorizontalPadding * 2) // full-bleed inside padding
+    val cardWidth = screenWidthDp - (outerHorizontalPadding * 2)
 
+    // Horizontal list of recommendation cards. Each item uses the computed width.
     LazyRow(
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         modifier = Modifier.fillMaxWidth()
@@ -74,6 +93,23 @@ fun RecommendationsBlock(
     }
 }
 
+/**
+ * FullWidthRecommendationCard
+ *
+ * A single recommendation card designed to occupy a full content width (provided via [width]).
+ * The card shows:
+ *  - optional category label (small, colored)
+ *  - title (two lines max)
+ *  - large image area (or a "No photo" placeholder)
+ *  - a distance chip in the top-right of the image
+ *
+ * @param title The place/title to display.
+ * @param categoryTitle Small category label shown above the title (optional).
+ * @param distanceMeters Distance in meters used to populate the DistanceChip.
+ * @param bitmap Optional image to render; if null a placeholder text is shown.
+ * @param width The card width (typically computed to fill the content area).
+ * @param imageHeight Height of the image area inside the card (default = 260.dp).
+ */
 @Composable
 private fun FullWidthRecommendationCard(
     title: String,
@@ -88,7 +124,11 @@ private fun FullWidthRecommendationCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp)) {
+        Column(Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 14.dp, vertical = 10.dp)
+        ) {
+
 
             if (categoryTitle.isNotBlank()) {
                 Text(
@@ -98,6 +138,8 @@ private fun FullWidthRecommendationCard(
                 )
                 Spacer(Modifier.height(2.dp))
             }
+
+            // Primary title — limit to two lines and ellipsize if needed
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
@@ -107,7 +149,7 @@ private fun FullWidthRecommendationCard(
             )
         }
 
-
+        // Image area — the image fills the card width and the specified height.
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -115,6 +157,7 @@ private fun FullWidthRecommendationCard(
                 .padding(horizontal = 14.dp, vertical = 10.dp)
         ) {
             if (bitmap != null) {
+                // Render the provided bitmap, clipped to the theme's medium shape
                 Image(
                     bitmap = bitmap.asImageBitmap(),
                     contentDescription = null,
@@ -145,8 +188,19 @@ private fun FullWidthRecommendationCard(
     }
 }
 
+/**
+ * DistanceChip
+ *
+ * Small surface that displays a human-friendly distance string.
+ * - Converts meters >= 1000 into kilometers and rounds to one decimal.
+ * - For distances < 1000, renders meters as an integer.
+ *
+ * @param meters Distance in meters.
+ * @param modifier Modifier for positioning (default = Modifier).
+ */
 @Composable
 private fun DistanceChip(meters: Double, modifier: Modifier = Modifier) {
+    // Convert meters to a human-friendly string and unit
     val (value, unit, text) = if (meters >= 1000) {
         val km = (meters / 100.0).roundToInt() / 10.0
         Triple(km, "km", "$km km")

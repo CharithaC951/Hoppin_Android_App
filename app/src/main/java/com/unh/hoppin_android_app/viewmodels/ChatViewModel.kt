@@ -1,13 +1,17 @@
-package com.unh.hoppin_android_app.chat
+package com.unh.hoppin_android_app.viewmodels
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.android.gms.maps.model.LatLng
+import com.unh.hoppin_android_app.Author
+import com.unh.hoppin_android_app.ChatMessage
+import com.unh.hoppin_android_app.chat.PlacesRepository
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlin.collections.filterNot
 
 class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -82,12 +86,23 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun findPlaces(cuisine: String, userLocation: LatLng?) {
         if (userLocation == null) {
-            addBotMessage(ChatMessage("I can't seem to find your location. Please enable location services and try again.", Author.BOT))
+            addBotMessage(
+                ChatMessage(
+                    "I can't seem to find your location. Please enable location services and try again.",
+                    Author.BOT
+                )
+            )
             return
         }
 
         viewModelScope.launch {
-            addBotMessage(ChatMessage("Okay, searching for ${cuisine.lowercase()} restaurants near you...", Author.BOT, isLoading = true))
+            addBotMessage(
+                ChatMessage(
+                    "Okay, searching for ${cuisine.lowercase()} restaurants near you...",
+                    Author.BOT,
+                    isLoading = true
+                )
+            )
 
             val result = placesRepository.searchNearbyPlaces(
                 query = "restaurant",
@@ -98,12 +113,28 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
             result.onSuccess { places ->
                 if (places.isNotEmpty()) {
-                    addBotMessage(ChatMessage("Here are some places I found:", Author.BOT, places = places))
+                    addBotMessage(
+                        ChatMessage(
+                            "Here are some places I found:",
+                            Author.BOT,
+                            places = places
+                        )
+                    )
                 } else {
-                    addBotMessage(ChatMessage("Sorry, I couldn't find any ${cuisine.lowercase()} restaurants nearby.", Author.BOT))
+                    addBotMessage(
+                        ChatMessage(
+                            "Sorry, I couldn't find any ${cuisine.lowercase()} restaurants nearby.",
+                            Author.BOT
+                        )
+                    )
                 }
             }.onFailure {
-                addBotMessage(ChatMessage("Oops! Something went wrong while searching. Please try again.", Author.BOT))
+                addBotMessage(
+                    ChatMessage(
+                        "Oops! Something went wrong while searching. Please try again.",
+                        Author.BOT
+                    )
+                )
             }
         }
     }

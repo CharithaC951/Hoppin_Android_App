@@ -18,7 +18,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.unh.hoppin_android_app.chat.ChatScreen
 import com.google.android.libraries.places.api.Places
 import com.unh.hoppin_android_app.ui.theme.Hoppin_Android_AppTheme
 import kotlinx.coroutines.launch
@@ -66,7 +65,7 @@ class MainActivity : ComponentActivity() {
 
 
                     if (showBottomBar) {
-                        // ✅ Scaffold only for screens that need bottom navigation
+                        // Scaffold only for screens that need bottom navigation
                         Scaffold(
                             bottomBar = {
                                 AppBottomBar(

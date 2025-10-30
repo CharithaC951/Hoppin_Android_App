@@ -21,7 +21,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.DialogProperties
 import androidx.navigation.NavController
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
@@ -40,9 +39,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 
-// -----------------------------
-//  Public Data Types
-// -----------------------------
 enum class ExploreType { RESTAURANTS, ENTERTAINMENT, TOURISM, SHOPPING, EMERGENCY }
 
 data class PlacePin(
@@ -52,9 +48,6 @@ data class PlacePin(
     val photo: Bitmap? = null
 )
 
-// -----------------------------
-//  Main Composable
-// -----------------------------
 @OptIn(ExperimentalPermissionsApi::class)
 @SuppressLint("MissingPermission")
 @Composable
