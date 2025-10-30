@@ -44,6 +44,7 @@ import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable
 fun LoginScreen(navController: NavController) {
@@ -62,7 +63,7 @@ fun LoginScreen(navController: NavController) {
             composable("SignInRoute") {
                 SignInUI(
                     onNavigateToCreateAccount = { authNavController.navigate("CreateAccountRoute") },
-                    onLoginSuccess = {userName->
+                    onLoginSuccess = { userName ->
                         navController.navigate("Home/$userName") {
                             popUpTo("login") { inclusive = true }
                         }
@@ -79,13 +80,17 @@ fun LoginScreen(navController: NavController) {
 }
 
 @Composable
-private fun SignInUI(onNavigateToCreateAccount: () -> Unit, onLoginSuccess: (userName: String) -> Unit) {
+private fun SignInUI(
+    onNavigateToCreateAccount: () -> Unit,
+    onLoginSuccess: (userName: String) -> Unit
+) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
     val auth = FirebaseAuth.getInstance()
     val db = FirebaseFirestore.getInstance()
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
     val googleSignInLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult(),
@@ -99,29 +104,55 @@ private fun SignInUI(onNavigateToCreateAccount: () -> Unit, onLoginSuccess: (use
                     if (firebaseTask.isSuccessful) {
                         val firebaseUser = auth.currentUser
                         if (firebaseUser != null) {
-                            val db = FirebaseFirestore.getInstance()
                             val userRef = db.collection("users").document(firebaseUser.uid)
                             userRef.get().addOnSuccessListener { document ->
                                 if (!document.exists()) {
                                     val newUser = hashMapOf(
-                                        "displayName" to firebaseUser.displayName,
-                                        "email" to firebaseUser.email,
-                                        "photoUrl" to firebaseUser.photoUrl.toString(),
+                                        "displayName" to (firebaseUser.displayName ?: ""),
+                                        "email" to (firebaseUser.email ?: ""),
+                                        "photoUrl" to (firebaseUser.photoUrl?.toString() ?: ""),
                                         "createdAt" to com.google.firebase.Timestamp.now(),
                                         "unreadNotificationCount" to 0,
                                         "savedPlaceIds" to emptyList<String>(),
                                         "favoritePlaceIds" to emptyList<String>()
                                     )
                                     userRef.set(newUser, SetOptions.merge())
-                                        .addOnSuccessListener { onLoginSuccess(firebaseUser.displayName!!) }
+                                        .addOnSuccessListener {
+                                            scope.launch {
+                                                try {
+                                                    StreakService.dailyCheckInFor(firebaseUser.uid)
+                                                } catch (_: Exception) { }
+                                                isLoading = false
+                                                onLoginSuccess(firebaseUser.displayName ?: "User")
+                                            }
+                                        }
                                         .addOnFailureListener { e ->
                                             isLoading = false
                                             Toast.makeText(context, "Failed to create profile: ${e.message}", Toast.LENGTH_LONG).show()
                                         }
                                 } else {
-                                    onLoginSuccess(firebaseUser.displayName!!)
+                                    scope.launch {
+                                        try {
+                                            StreakService.dailyCheckInFor(firebaseUser.uid)
+                                        } catch (_: Exception) { /* ignore */ }
+                                        isLoading = false
+                                        onLoginSuccess(firebaseUser.displayName ?: "User")
+                                    }
+                                }
+                            }.addOnFailureListener { e ->
+                                // Even if profile fetch fails, still streak & navigate with fallback name
+                                scope.launch {
+                                    try {
+                                        StreakService.dailyCheckInFor(firebaseUser.uid)
+                                    } catch (_: Exception) { }
+                                    isLoading = false
+                                    Log.w("Firestore", "Error reading user doc", e)
+                                    onLoginSuccess(firebaseUser.displayName ?: "User")
                                 }
                             }
+                        } else {
+                            isLoading = false
+                            Toast.makeText(context, "Authentication failed: missing user.", Toast.LENGTH_SHORT).show()
                         }
                     } else {
                         isLoading = false
@@ -168,29 +199,42 @@ private fun SignInUI(onNavigateToCreateAccount: () -> Unit, onLoginSuccess: (use
                         .addOnCompleteListener { task ->
                             if (task.isSuccessful) {
                                 val userId = auth.currentUser?.uid
+                                val displayNameFallback = auth.currentUser?.displayName ?: "User"
 
                                 if (userId != null) {
                                     db.collection("users").document(userId).get()
                                         .addOnSuccessListener { document ->
-                                            isLoading = false
-                                            val userName = document.getString("name") ?: "User"
+                                            val userName = document.getString("name") ?: displayNameFallback
                                             Log.d("Firebase", "Login Success. Name: $userName")
-                                            onLoginSuccess(userName)
+
+
+                                            scope.launch {
+                                                try {
+                                                    StreakService.dailyCheckInFor(userId)
+                                                } catch (_: Exception) { }
+                                                isLoading = false
+                                                onLoginSuccess(userName)
+                                            }
                                         }
                                         .addOnFailureListener { e ->
-                                            isLoading = false
                                             Log.w("Firestore", "Error getting user document", e)
-                                            onLoginSuccess("User")
+                                            scope.launch {
+                                                try {
+                                                    StreakService.dailyCheckInFor(userId)
+                                                } catch (_: Exception) { }
+                                                isLoading = false
+                                                onLoginSuccess(displayNameFallback)
+                                            }
                                         }
                                 } else {
                                     isLoading = false
                                     Log.e("Firebase", "Auth success but no user ID.")
-                                    onLoginSuccess("User")
+                                    Toast.makeText(context, "Unexpected error: user not available.", Toast.LENGTH_LONG).show()
                                 }
-                            }else {
+                            } else {
+                                isLoading = false
                                 Log.w("Firebase", "signInWithEmail:failure", task.exception)
                                 Toast.makeText(context, "Invalid username or password.", Toast.LENGTH_LONG).show()
-                                onLoginSuccess("User")
                             }
                         }
                 },
@@ -340,7 +384,7 @@ private fun TermsAndPrivacyText() {
         withStyle(style = SpanStyle(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)) { append("Privacy Policy") }
         pop()
     }
-    ClickableText(text = annotatedString, onClick = { offset -> /* Handle clicks */ }, style = LocalTextStyle.current.copy(textAlign = TextAlign.Center, color = Color.Gray, fontSize = 12.sp), modifier = Modifier.padding(horizontal = 16.dp))
+    ClickableText(text = annotatedString, onClick = { }, style = LocalTextStyle.current.copy(textAlign = TextAlign.Center, color = Color.Gray, fontSize = 12.sp), modifier = Modifier.padding(horizontal = 16.dp))
 }
 
 @Preview(showBackground = true, name = "Sign In UI")
