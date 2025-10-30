@@ -70,14 +70,14 @@ object CategoriesRepository {
     private val SUBS: Map<Int, List<SubCategory>> = mapOf(
         1 to listOf(
             SubCategory("museums", "Museums", listOf("museum"), R.drawable.museum),
-            SubCategory("gallery", "Art Gallery", listOf("art_gallery"), R.drawable.museum),
-            SubCategory("parks", "Parks", listOf("park"), R.drawable.museum),
-            SubCategory("attract", "Attractions", listOf("tourist_attraction"), R.drawable.museum)
+            SubCategory("gallery", "Art Gallery", listOf("art_gallery"), R.drawable.art_gallery),
+            SubCategory("parks", "Parks", listOf("park"), R.drawable.park),
+            SubCategory("attract", "Attractions", listOf("tourist_attraction"), R.drawable.tour_attr)
         ),
         2 to listOf(
-            SubCategory("restaurants", "Restaurants", listOf("restaurant"), R.drawable.museum),
-            SubCategory("cafes", "Cafes", listOf("cafe", "bakery"), R.drawable.museum),
-            SubCategory("bars", "Bars", listOf("bar"), R.drawable.museum)
+            SubCategory("restaurants", "Restaurants", listOf("restaurant"), R.drawable.restaurants),
+            SubCategory("cafes", "Cafes", listOf("cafe", "bakery"), R.drawable.cafe),
+            SubCategory("bars", "Bars", listOf("bar"), R.drawable.bar)
         ),
         3 to listOf(
             SubCategory("movies", "Movie Theater", listOf("movie_theater"), R.drawable.museum),
