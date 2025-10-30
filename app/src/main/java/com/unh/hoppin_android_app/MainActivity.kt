@@ -22,7 +22,7 @@ import com.google.android.libraries.places.api.Places
 import com.unh.hoppin_android_app.ui.theme.Hoppin_Android_AppTheme
 import kotlinx.coroutines.launch
 
-const val USER_NAME_ARG = "userName"
+const val USER_NAME_ARG = "Hopper"
 const val HOME_ROUTE_PATTERN = "Home/{$USER_NAME_ARG}"
 
 class MainActivity : ComponentActivity() {
