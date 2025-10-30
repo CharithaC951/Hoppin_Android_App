@@ -25,7 +25,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 @Composable
 fun GamificationScreen(
     navController: NavController,
-    userName: String = "Raghav",
+    userName: String = "User",
     xp: Int = 420,
     level: Int = 4,
     levelProgress: Float = 0.35f,

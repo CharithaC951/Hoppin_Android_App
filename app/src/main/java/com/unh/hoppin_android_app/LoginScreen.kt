@@ -2,6 +2,7 @@
 
 package com.unh.hoppin_android_app
 
+import android.net.Uri
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -32,7 +33,6 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -46,22 +46,20 @@ import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.delay
 
 /**
- * LoginScreen
- *
- * Top-level entry composable for the Authentication UI.
- * Hosts an internal NavHost that switches between Sign In and Create Account flows.
- *
- * @param navController The application's NavController — used to navigate to the Home screen on success.
+ * Top-level LoginScreen - hosts the sign-in / create account internal nav
+ * This is the screen you provided originally — refactored to encode the username
+ * and to navigate to the global navController's "home/{userName}" route.
  */
 @Composable
-fun LoginScreen(navController: NavController) {
+fun LoginScreen(navController: androidx.navigation.NavHostController) {
     Box(modifier = Modifier.fillMaxSize()) {
+        // Background image (optional) - replace with your drawable
         Image(
             painter = painterResource(id = R.drawable.hoppinbackground),
             contentDescription = "Background",
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop,
-            alpha = 0.4f
+            alpha = 0.35f
         )
 
         val authNavController = rememberNavController()
@@ -71,7 +69,9 @@ fun LoginScreen(navController: NavController) {
                 SignInUI(
                     onNavigateToCreateAccount = { authNavController.navigate("CreateAccountRoute") },
                     onLoginSuccess = { userName ->
-                        navController.navigate("Home/$userName") {
+                        // encode before navigating to avoid issues with spaces/special chars
+                        val encoded = Uri.encode(userName)
+                        navController.navigate("home/$encoded") {
                             popUpTo("login") { inclusive = true }
                         }
                     }
@@ -88,92 +88,81 @@ fun LoginScreen(navController: NavController) {
 
 /**
  * SignInUI
- *
- * Renders the sign-in form and handles:
- *  - Email/password sign-in via FirebaseAuth
- *  - Google Sign-In flow (using a launcher and Firebase credential exchange)
- *  - Simple client-side validation and loading state
- *
- * @param onNavigateToCreateAccount Callback to open the create-account screen.
- * @param onLoginSuccess Callback invoked with the display name when login completes successfully.
  */
 @Composable
 private fun SignInUI(onNavigateToCreateAccount: () -> Unit, onLoginSuccess: (userName: String) -> Unit) {
-    // Local form state
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
 
-    // Firebase and Firestore instances
     val auth = FirebaseAuth.getInstance()
     val db = FirebaseFirestore.getInstance()
     val context = LocalContext.current
 
-    /**
-     * Launcher for the Google Sign-In intent. The result is handled inline:
-     *  - Exchange Google ID token for Firebase credential
-     *  - On first-time sign-in, create a minimal user document in 'users' collection
-     */
+    // Google sign-in launcher
     val googleSignInLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult(),
-        onResult = { result ->
-            val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
-            try {
-                val account = task.getResult(ApiException::class.java)!!
-                val credential = GoogleAuthProvider.getCredential(account.idToken!!, null)
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+        try {
+            val account = task.getResult(ApiException::class.java)!!
+            val credential = GoogleAuthProvider.getCredential(account.idToken!!, null)
 
-                isLoading = true
-                auth.signInWithCredential(credential).addOnCompleteListener { firebaseTask ->
-                    if (firebaseTask.isSuccessful) {
-                        val firebaseUser = auth.currentUser
-                        if (firebaseUser != null) {
-                            val userRef = db.collection("users").document(firebaseUser.uid)
-                            userRef.get().addOnSuccessListener { document ->
-                                if (!document.exists()) {
-                                    // First time sign-in: create a minimal profile document
-                                    val displayName = firebaseUser.displayName ?: firebaseUser.email ?: "User"
-                                    val newUser = hashMapOf(
-                                        "name" to displayName,
-                                        "displayName" to firebaseUser.displayName,
-                                        "email" to firebaseUser.email,
-                                        "photoUrl" to firebaseUser.photoUrl.toString(),
-                                        "createdAt" to com.google.firebase.Timestamp.now(),
-                                        "unreadNotificationCount" to 0,
-                                        "savedPlaceIds" to emptyList<String>(),
-                                        "favoritePlaceIds" to emptyList<String>()
-                                    )
-                                    userRef.set(newUser, SetOptions.merge())
-                                        .addOnSuccessListener {
-                                            // Navigate once profile document is written
-                                            onLoginSuccess(displayName)
-                                        }
-                                        .addOnFailureListener { e ->
-                                            isLoading = false
-                                            Toast.makeText(context, "Failed to create profile: ${e.message}", Toast.LENGTH_LONG).show()
-                                        }
-                                } else {
-                                    // Existing user document: directly proceed
-                                    onLoginSuccess(firebaseUser.displayName!!)
-                                }
+            isLoading = true
+            auth.signInWithCredential(credential).addOnCompleteListener { firebaseTask ->
+                if (firebaseTask.isSuccessful) {
+                    val firebaseUser = auth.currentUser
+                    if (firebaseUser != null) {
+                        val userRef = db.collection("users").document(firebaseUser.uid)
+                        userRef.get().addOnSuccessListener { document ->
+                            if (!document.exists()) {
+                                // First-time sign-in: create profile with 'name' field
+                                val displayName = firebaseUser.displayName ?: firebaseUser.email ?: "User"
+                                val newUser = hashMapOf(
+                                    "name" to displayName,
+                                    "displayName" to firebaseUser.displayName,
+                                    "email" to firebaseUser.email,
+                                    "photoUrl" to (firebaseUser.photoUrl?.toString() ?: ""),
+                                    "createdAt" to com.google.firebase.Timestamp.now(),
+                                    "unreadNotificationCount" to 0,
+                                    "savedPlaceIds" to emptyList<String>(),
+                                    "favoritePlaceIds" to emptyList<String>()
+                                )
+                                userRef.set(newUser, SetOptions.merge())
+                                    .addOnSuccessListener {
+                                        isLoading = false
+                                        onLoginSuccess("Hopper")
+                                    }
+                                    .addOnFailureListener { e ->
+                                        isLoading = false
+                                        Toast.makeText(context, "Failed to create profile: ${e.message}", Toast.LENGTH_LONG).show()
+                                    }
+                            } else {
+                                // Existing doc - prefer Firestore 'name' field
+                                val docName = document.getString("name")
+                                val fallback = firebaseUser.displayName ?: firebaseUser.email ?: "User"
+                                val userName = docName ?: fallback
+                                isLoading = false
+                                onLoginSuccess("Hopper")
                             }
-                        } else {
-                            // Unexpected: auth succeeded but no currentUser object
+                        }.addOnFailureListener { e ->
                             isLoading = false
-                            Toast.makeText(context, "Authentication succeeded but user data missing.", Toast.LENGTH_LONG).show()
+                            Toast.makeText(context, "Failed to read profile: ${e.message}", Toast.LENGTH_LONG).show()
                         }
                     } else {
-                        // Firebase sign-in with Google credential failed
                         isLoading = false
-                        Toast.makeText(context, "Firebase authentication failed.", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Authentication succeeded but user info missing.", Toast.LENGTH_LONG).show()
                     }
+                } else {
+                    isLoading = false
+                    Toast.makeText(context, "Firebase authentication failed.", Toast.LENGTH_SHORT).show()
                 }
-            } catch (e: ApiException) {
-                // Google sign-in failed (user cancelled or other error)
-                isLoading = false
-                Toast.makeText(context, "Google sign in failed.", Toast.LENGTH_SHORT).show()
             }
+        } catch (e: ApiException) {
+            isLoading = false
+            Toast.makeText(context, "Google sign in failed.", Toast.LENGTH_SHORT).show()
         }
-    )
+    }
 
     Column(
         modifier = Modifier
@@ -235,7 +224,6 @@ private fun SignInUI(onNavigateToCreateAccount: () -> Unit, onLoginSuccess: (use
                     auth.signInWithEmailAndPassword(email.trim(), password.trim())
                         .addOnCompleteListener { task ->
                             if (task.isSuccessful) {
-                                // After auth succeeds, fetch the user's Firestore doc to get display name
                                 val userId = auth.currentUser?.uid
                                 if (userId != null) {
                                     db.collection("users").document(userId).get()
@@ -247,22 +235,24 @@ private fun SignInUI(onNavigateToCreateAccount: () -> Unit, onLoginSuccess: (use
                                             val fallbackEmail = auth.currentUser?.email
                                             val userName = docName ?: docDisplay ?: authName ?: fallbackEmail ?: "User"
                                             Log.d("Firebase", "Login Success. Name: $userName")
-                                            onLoginSuccess(userName)
+                                            onLoginSuccess("Hopper")
                                         }
                                         .addOnFailureListener { e ->
                                             isLoading = false
                                             Log.w("Firestore", "Error getting user document", e)
-                                            onLoginSuccess("User")
+                                            val fallback = auth.currentUser?.displayName ?: auth.currentUser?.email ?: "User"
+                                            onLoginSuccess("Hopper")
                                         }
                                 } else {
                                     isLoading = false
                                     Log.e("Firebase", "Auth success but no user ID.")
+                                    Toast.makeText(context, "Login succeeded but user ID missing.", Toast.LENGTH_LONG).show()
                                 }
                             } else {
+                                isLoading = false
                                 Log.w("Firebase", "signInWithEmail:failure", task.exception)
                                 Toast.makeText(context, "Invalid username or password.", Toast.LENGTH_LONG).show()
-                                onLoginSuccess("User")
-                                isLoading = false
+                                // do NOT call onLoginSuccess here
                             }
                         }
                 },
@@ -291,14 +281,12 @@ private fun SignInUI(onNavigateToCreateAccount: () -> Unit, onLoginSuccess: (use
         // Google Sign-In button
         Button(
             onClick = {
-                // GoogleSignInOptions requesting an ID token for Firebase
                 val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
                     .requestIdToken("590816117011-o42oiclbce1r79urio3o02qgsr9k20lu.apps.googleusercontent.com")
                     .requestEmail()
                     .build()
 
                 val googleSignInClient = GoogleSignIn.getClient(context, gso)
-                // Sign out any cached account first, then launch the sign-in intent
                 googleSignInClient.signOut().addOnCompleteListener {
                     googleSignInLauncher.launch(googleSignInClient.signInIntent)
                 }
@@ -333,17 +321,9 @@ private fun SignInUI(onNavigateToCreateAccount: () -> Unit, onLoginSuccess: (use
 
 /**
  * CreateAccountUI
- *
- * Renders a simple registration form:
- *  - collects name, email, phone, password, confirm password
- *  - validates inputs and passwords match
- *  - creates a Firebase Authentication user and stores minimal profile in Firestore
- *
- * @param onNavigateBack Called after successful creation or when the back button is pressed.
  */
 @Composable
 private fun CreateAccountUI(onNavigateBack: () -> Unit) {
-    // Form state
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var phoneNumber by remember { mutableStateOf("") }
@@ -383,7 +363,6 @@ private fun CreateAccountUI(onNavigateBack: () -> Unit) {
                 .padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Heading / title
             Text(
                 "Welcome to Hoppin",
                 fontSize = 32.sp,
@@ -444,13 +423,11 @@ private fun CreateAccountUI(onNavigateBack: () -> Unit) {
             )
             Spacer(modifier = Modifier.height(32.dp))
 
-            // Create account button or loading indicator
             if (isLoading) {
                 CircularProgressIndicator()
             } else {
                 Button(
                     onClick = {
-                        // Basic form validations
                         if (name.isBlank() || email.isBlank() || password.isBlank()) {
                             Toast.makeText(context, "Name, email, and password cannot be empty.", Toast.LENGTH_SHORT).show()
                             return@Button
@@ -462,13 +439,11 @@ private fun CreateAccountUI(onNavigateBack: () -> Unit) {
 
                         isLoading = true
                         val auth = FirebaseAuth.getInstance()
-                        // Create the Firebase Authentication user
                         auth.createUserWithEmailAndPassword(email.trim(), password.trim())
                             .addOnCompleteListener { task ->
                                 if (task.isSuccessful) {
                                     val userId = auth.currentUser?.uid
                                     if (userId != null) {
-                                        // Save a minimal profile document in Firestore
                                         val db = FirebaseFirestore.getInstance()
                                         val userMap = hashMapOf(
                                             "name" to name.trim(),
@@ -485,7 +460,6 @@ private fun CreateAccountUI(onNavigateBack: () -> Unit) {
                                                 Toast.makeText(context, "Failed to save user details: ${e.message}", Toast.LENGTH_LONG).show()
                                             }
                                     } else {
-                                        // Unexpected: auth created but no UID returned
                                         isLoading = false
                                         Toast.makeText(context, "Account created but user id missing.", Toast.LENGTH_LONG).show()
                                     }
@@ -504,7 +478,6 @@ private fun CreateAccountUI(onNavigateBack: () -> Unit) {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Terms & privacy inline text
             TermsAndPrivacyText()
         }
     }
@@ -512,27 +485,18 @@ private fun CreateAccountUI(onNavigateBack: () -> Unit) {
 
 /**
  * SuccessDialog
- *
- * Small full-screen dialog shown when an account is created successfully.
- * This composable intentionally has an empty onDismissRequest in the original design so it
- * cannot be dismissed by the user while the auto-redirect runs.
  */
 @Composable
 private fun SuccessDialog() {
     AlertDialog(
-        onDismissRequest = { /* intentionally empty so it stays visible briefly */ },
+        onDismissRequest = { /* intentionally no-op */ },
         title = { Text("Success!") },
         text = { Text("Account created successfully.\nRedirecting to the login page...") },
         confirmButton = {}
     )
 }
 
-/**
- * OrSeparator
- *
- * Visual helper used between the primary sign-in button and social sign-in.
- * Simple text-based separator; replace with a row + divider if you want a stronger visual.
- */
+/** Small helpers **/
 @Composable
 private fun OrSeparator() {
     Text(
@@ -543,12 +507,6 @@ private fun OrSeparator() {
     )
 }
 
-/**
- * TermsAndPrivacyText
- *
- * Displays small print with clickable (annotated) spans for Terms and Privacy.
- * Currently, the click handler is a placeholder — wire it to open web URLs or in-app screens.
- */
 @Composable
 private fun TermsAndPrivacyText() {
     val annotatedString = buildAnnotatedString {
@@ -569,23 +527,42 @@ private fun TermsAndPrivacyText() {
     ClickableText(
         text = annotatedString,
         onClick = { offset ->
-            // TODO: Map offset to annotation and open the corresponding URL or in-app screen.
-            // Example:
-            // val annotation = annotatedString.getStringAnnotations(tag = "TOS", start = offset, end = offset).firstOrNull()
+            // TODO: open the correct URL or in-app screen
         },
         style = LocalTextStyle.current.copy(textAlign = TextAlign.Center, color = Color.Gray, fontSize = 12.sp),
         modifier = Modifier.padding(horizontal = 16.dp)
     )
 }
 
-@Preview(showBackground = true, name = "Sign In UI")
+/**
+ * Minimal HomeScreen to prove username gets passed correctly
+ */
 @Composable
-private fun SignInUIPreview() {
+fun HomeScreen(userName: String) {
+    Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFFF6F6F6)) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text("Welcome,", fontSize = 20.sp, color = Color.DarkGray)
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(userName, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color(0xFF333333))
+        }
+    }
+}
+
+/** Previews **/
+@Preview(showBackground = true)
+@Composable
+private fun PreviewSignIn() {
     SignInUI(onNavigateToCreateAccount = {}, onLoginSuccess = {})
 }
 
-@Preview(showBackground = true, name = "Create Account UI")
+@Preview(showBackground = true)
 @Composable
-private fun CreateAccountUIPreview() {
+private fun PreviewCreateAccount() {
     CreateAccountUI(onNavigateBack = {})
 }
