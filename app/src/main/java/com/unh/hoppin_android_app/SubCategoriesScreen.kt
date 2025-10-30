@@ -30,9 +30,28 @@ import androidx.navigation.compose.rememberNavController
 import com.google.android.gms.maps.model.LatLng
 import com.unh.hoppin_android_app.viewmodels.RecommendationViewModel
 import kotlinx.coroutines.launch
-import kotlin.collections.forEachIndexed
 import kotlin.collections.getOrNull
 
+/**
+ * SubCategoriesScreen
+ *
+ * Displays subcategories for a selected top-level category.
+ *
+ * The screen:
+ *  - Loads recommendations (thumbnails) for the selected category if they're not already present in the view model
+ *  - Shows a horizontally scrollable row of FilterChips for the available subcategories
+ *  - Uses a HorizontalPager to render a full-bleed "pane" per subcategory
+ *
+ * Notes:
+ *  - The RecommendationViewModel is used as the data source and may perform network requests.
+ *  - The pager and chips are kept in sync: tapping a chip scrolls the pager and changing the page highlights the chip.
+ *
+ * @param navController NavController used for back navigation.
+ * @param catId The id of the main category to display subcategories for.
+ * @param vm RecommendationViewModel providing recommendation data and thumbnails.
+ * @param center The center LatLng used when fetching recommendations (defaults to a New Haven center).
+ * @param perCategory How many items to request per category (useful to limit network usage).
+ */
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun SubCategoriesScreen(
@@ -43,11 +62,21 @@ fun SubCategoriesScreen(
     perCategory: Int = 20
 ) {
     val context = LocalContext.current
+
+    // Observe the view model UI state
     val ui = vm.ui.collectAsState().value
 
+    // Resolve the Category and its SubCategory list from the repository
     val category: Category? = remember(catId) { CategoriesRepository.getCategoryById(catId) }
     val subs: List<SubCategory> = remember(catId) { CategoriesRepository.subCategoriesOf(catId) }
 
+    /**
+     * When the screen appears or the category changes:
+     *  - If the view model has no sections loaded, request data from the network (vm.load).
+     *  - If sections already exist, derive (filter/sort) locally based on the provided center.
+     *
+     * This keeps network calls minimal and allows local re-filtering when center changes.
+     */
     LaunchedEffect(catId) {
         val oneCat = category?.let { listOf(it) } ?: emptyList()
         if (ui.sections.isEmpty()) {
@@ -59,10 +88,12 @@ fun SubCategoriesScreen(
                 fetchThumbnails = true
             )
         } else {
+            // Derive results locally: cheaper when we already have data in memory
             vm.deriveLocally(center = center, categories = oneCat, perCategory = perCategory)
         }
     }
 
+    // Pager state for the HorizontalPager — number of pages equals number of subs (at least 1)
     val pagerState = rememberPagerState(pageCount = { subs.size.coerceAtLeast(1) })
     val scope = rememberCoroutineScope()
 
@@ -78,8 +109,15 @@ fun SubCategoriesScreen(
             )
         }
     ) { padding ->
+
+        // Handle basic UI states: loading, error, or main content
         when {
-            ui.loading -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+            ui.loading -> Box(
+                Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentAlignment = Alignment.Center
+            ) {
                 CircularProgressIndicator()
             }
             ui.error != null -> Text(
@@ -112,7 +150,6 @@ fun SubCategoriesScreen(
                         }
                     }
 
-
                     Spacer(Modifier.height(12.dp))
 
                     HorizontalPager(
@@ -121,10 +158,12 @@ fun SubCategoriesScreen(
                         contentPadding = PaddingValues(0.dp),        // full-bleed width
                         modifier = Modifier.fillMaxSize()
                     ) { page ->
+                        // Safe-get the subcategory for the page (getOrNull returns null if out-of-range)
                         val sub = subs.getOrNull(page)
+                        // SubPaneCard renders a large visual card for the subcategory
                         SubPaneCard(
                             title = sub?.title ?: "",
-                            image = sub?.image!!,
+                            image = sub?.image ?: R.drawable.museum, // fallback image if something is wrong
                             height = 720.dp
                         )
                     }
@@ -134,6 +173,17 @@ fun SubCategoriesScreen(
     }
 }
 
+/**
+ * SubPaneCard
+ *
+ * Large visual card used for each pager page. Shows:
+ *  - A full-bleed image background
+ *  - A bottom overlay with the subcategory title and a small decorative row
+ *
+ * @param title Title to display in the overlay.
+ * @param image Drawable resource id to show as the background.
+ * @param height Card height (default is 420.dp in other contexts; here overridden to 720.dp in pager).
+ */
 @Composable
 private fun SubPaneCard(
     title: String,
@@ -177,6 +227,8 @@ private fun SubPaneCard(
                         color = Color.White
                     )
                     Spacer(Modifier.height(4.dp))
+
+                    // Decorative row — can be replaced with ratings or tag chips later
                     Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                         repeat(5) { Text("•", color = Color.White.copy(alpha = 0.9f)) }
                     }
@@ -186,6 +238,11 @@ private fun SubPaneCard(
     }
 }
 
+/**
+ * Preview for the SubCategoriesScreen.
+ *
+ * Shows the composable inside a simple column for quick design-time testing.
+ */
 @Preview(showBackground = true)
 @Composable
 fun SubCategoriesPreview() {

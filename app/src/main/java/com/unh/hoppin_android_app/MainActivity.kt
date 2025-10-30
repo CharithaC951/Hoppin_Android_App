@@ -18,7 +18,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.unh.hoppin_android_app.chat.ChatScreen
 import com.google.android.libraries.places.api.Places
 import com.unh.hoppin_android_app.ui.theme.Hoppin_Android_AppTheme
 import kotlinx.coroutines.launch
@@ -55,7 +54,14 @@ class MainActivity : ComponentActivity() {
                     val currentBackStackEntry by navController.currentBackStackEntryAsState()
                     val currentRoute = currentBackStackEntry?.destination?.route
 
-                    val showBottomBar = currentRoute != "login"
+                    val showBottomBar = currentRoute != "login" // hide bar on login screen
+
+                    UserAutoStreakHandler(navToHome = { userName ->
+                        navController.navigate("Home/$userName") {
+                            popUpTo("login") { inclusive = true }
+                            launchSingleTop = true
+                        }
+                    })
 
 
                     if (showBottomBar) {

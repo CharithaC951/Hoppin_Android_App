@@ -1,5 +1,4 @@
-package com.unh.hoppin_android_app.chat
-
+package com.unh.hoppin_android_app
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -13,11 +12,9 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,7 +30,21 @@ import com.google.android.libraries.places.api.model.Place
 import com.unh.hoppin_android_app.viewmodels.LocationViewModel
 import com.unh.hoppin_android_app.ui.theme.DarkPurple
 import com.unh.hoppin_android_app.ui.theme.LightPurple
+import com.unh.hoppin_android_app.viewmodels.ChatViewModel
+import kotlin.collections.reversed
 
+/**
+ * ChatScreen
+ *
+ * Top-level composable that renders the chat UI:
+ *  - Top app bar with back navigation
+ *  - Scrollable message list (LazyColumn)
+ *  - Quick reply chips (LazyRow)
+ *
+ * @param chatViewModel ViewModel that provides messages and quick replies.
+ * @param locationViewModel ViewModel that provides the device location (optional for location-aware replies).
+ * @param onNavigateBack Callback when the user taps the back button.
+ */
 @Composable
 fun ChatScreen(
     chatViewModel: ChatViewModel = viewModel(),
@@ -75,15 +86,18 @@ fun ChatScreen(
                 }
             }
 
+            // Quick reply row: small tappable suggestions below the messages
             QuickReplies(
                 replies = quickReplies,
                 onReplyClicked = { reply ->
+                    // Attach last known device coordinates if available when sending the reply
                     val coordinates = locationData.coordinates
                     val userLatLng = if (coordinates != null) {
                         LatLng(coordinates.latitude, coordinates.longitude)
                     } else {
                         null
                     }
+                    // Tell the VM that the user selected a quick reply (with optional location)
                     chatViewModel.onUserReply(reply, userLatLng)
                 }
             )
@@ -91,6 +105,17 @@ fun ChatScreen(
     }
 }
 
+/**
+ * MessageBubble
+ *
+ * Renders a single chat message as a speech bubble.
+ * - Bot messages align to the left and use a light background (LightPurple).
+ * - User messages align to the right and use a dark background (DarkPurple).
+ *
+ * The bubble supports:
+ * - an optional loading spinner when the message is still being produced
+ * - an embedded list of Place cards when the message contains place suggestions
+ */
 @Composable
 fun MessageBubble(message: ChatMessage) {
     val isBot = message.author == Author.BOT
@@ -145,12 +170,18 @@ fun MessageBubble(message: ChatMessage) {
     }
 }
 
+/**
+ * PlacesList
+ *
+ * Horizontally scrolling list of PlaceCard composables.
+ * Used inside message bubbles when the bot suggests multiple places.
+ */
 @Composable
 fun PlacesList(places: List<Place>) {
     LazyRow(
         modifier = Modifier.padding(top = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
-        contentPadding = PaddingValues(end = 80.dp)
+        contentPadding = PaddingValues(end = 80.dp) // extra padding to avoid edge cut-off
     ) {
         items(places) { place ->
             PlaceCard(place = place)
@@ -158,6 +189,17 @@ fun PlacesList(places: List<Place>) {
     }
 }
 
+/**
+ * PlaceCard
+ *
+ * Small card UI representing a Place from the Places API.
+ * Shows:
+ *  - place.name (or "Unknown Place")
+ *  - place.address (or fallback text)
+ *  - optional rating (with star icon)
+ *
+ * The card has a fixed width to keep the horizontal list consistent.
+ */
 @Composable
 fun PlaceCard(place: Place) {
     Card(
@@ -172,7 +214,9 @@ fun PlaceCard(place: Place) {
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+
             Spacer(modifier = Modifier.height(4.dp))
+
             Text(
                 text = place.address ?: "No address provided",
                 fontSize = 14.sp,
@@ -183,7 +227,12 @@ fun PlaceCard(place: Place) {
             place.rating?.let { rating ->
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Star, contentDescription = "Rating", tint = Color(0xFFFFC107), modifier = Modifier.size(16.dp))
+                    Icon(
+                        Icons.Default.Star,
+                        contentDescription = "Rating",
+                        tint = Color(0xFFFFC107),
+                        modifier = Modifier.size(16.dp)
+                    )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = "$rating",
@@ -196,6 +245,15 @@ fun PlaceCard(place: Place) {
     }
 }
 
+/**
+ * QuickReplies
+ *
+ * A horizontally scrolling row of suggested reply buttons. These are short,
+ * tappable strings that are intended to speed up user interaction.
+ *
+ * @param replies list of strings to show as buttons
+ * @param onReplyClicked callback invoked with the selected reply
+ */
 @Composable
 fun QuickReplies(replies: List<String>, onReplyClicked: (String) -> Unit) {
     LazyRow(
@@ -212,7 +270,6 @@ fun QuickReplies(replies: List<String>, onReplyClicked: (String) -> Unit) {
             ) {
                 Text(text = reply, color = Color.Black)
             }
-
         }
     }
 }
