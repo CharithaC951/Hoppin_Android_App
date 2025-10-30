@@ -44,6 +44,7 @@ import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * Top-level LoginScreen - hosts the sign-in / create account internal nav
@@ -98,56 +99,74 @@ private fun SignInUI(onNavigateToCreateAccount: () -> Unit, onLoginSuccess: (use
     val auth = FirebaseAuth.getInstance()
     val db = FirebaseFirestore.getInstance()
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
     // Google sign-in launcher
     val googleSignInLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
-        try {
-            val account = task.getResult(ApiException::class.java)!!
-            val credential = GoogleAuthProvider.getCredential(account.idToken!!, null)
+        contract = ActivityResultContracts.StartActivityForResult(),
+        onResult = { result ->
+            val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+            try {
+                val account = task.getResult(ApiException::class.java)!!
+                val credential = GoogleAuthProvider.getCredential(account.idToken!!, null)
 
-            isLoading = true
-            auth.signInWithCredential(credential).addOnCompleteListener { firebaseTask ->
-                if (firebaseTask.isSuccessful) {
-                    val firebaseUser = auth.currentUser
-                    if (firebaseUser != null) {
-                        val userRef = db.collection("users").document(firebaseUser.uid)
-                        userRef.get().addOnSuccessListener { document ->
-                            if (!document.exists()) {
-                                // First-time sign-in: create profile with 'name' field
-                                val displayName = firebaseUser.displayName ?: firebaseUser.email ?: "User"
-                                val newUser = hashMapOf(
-                                    "name" to displayName,
-                                    "displayName" to firebaseUser.displayName,
-                                    "email" to firebaseUser.email,
-                                    "photoUrl" to (firebaseUser.photoUrl?.toString() ?: ""),
-                                    "createdAt" to com.google.firebase.Timestamp.now(),
-                                    "unreadNotificationCount" to 0,
-                                    "savedPlaceIds" to emptyList<String>(),
-                                    "favoritePlaceIds" to emptyList<String>()
-                                )
-                                userRef.set(newUser, SetOptions.merge())
-                                    .addOnSuccessListener {
+                isLoading = true
+                auth.signInWithCredential(credential).addOnCompleteListener { firebaseTask ->
+                    if (firebaseTask.isSuccessful) {
+                        val firebaseUser = auth.currentUser
+                        if (firebaseUser != null) {
+                            val userRef = db.collection("users").document(firebaseUser.uid)
+                            userRef.get().addOnSuccessListener { document ->
+                                if (!document.exists()) {
+                                    // First time sign-in: create a minimal profile document
+                                    val displayName = firebaseUser.displayName ?: firebaseUser.email ?: "User"
+                                    val newUser = hashMapOf(
+                                        "name" to displayName,
+                                        "displayName" to firebaseUser.displayName,
+                                        "email" to firebaseUser.email,
+                                        "photoUrl" to firebaseUser.photoUrl.toString(),
+                                        "createdAt" to com.google.firebase.Timestamp.now(),
+                                        "unreadNotificationCount" to 0,
+                                        "savedPlaceIds" to emptyList<String>(),
+                                        "favoritePlaceIds" to emptyList<String>()
+                                    )
+                                    userRef.set(newUser, SetOptions.merge())
+                                        .addOnSuccessListener {
+                                            scope.launch {
+                                                try {
+                                                    StreakService.dailyCheckInFor(firebaseUser.uid)
+                                                } catch (_: Exception) { }
+                                                isLoading = false
+                                                onLoginSuccess(firebaseUser.displayName ?: "User")
+                                            }
+                                        }
+                                        .addOnFailureListener { e ->
+                                            isLoading = false
+                                            Toast.makeText(context, "Failed to create profile: ${e.message}", Toast.LENGTH_LONG).show()
+                                        }
+                                } else {
+                                    scope.launch {
+                                        try {
+                                            StreakService.dailyCheckInFor(firebaseUser.uid)
+                                        } catch (_: Exception) { /* ignore */ }
                                         isLoading = false
-                                        onLoginSuccess("Hopper")
+                                        onLoginSuccess(firebaseUser.displayName ?: "User")
                                     }
-                                    .addOnFailureListener { e ->
-                                        isLoading = false
-                                        Toast.makeText(context, "Failed to create profile: ${e.message}", Toast.LENGTH_LONG).show()
-                                    }
-                            } else {
-                                // Existing doc - prefer Firestore 'name' field
-                                val docName = document.getString("name")
-                                val fallback = firebaseUser.displayName ?: firebaseUser.email ?: "User"
-                                val userName = docName ?: fallback
-                                isLoading = false
-                                onLoginSuccess("Hopper")
+                                }
+                            }.addOnFailureListener { e ->
+                                // Even if profile fetch fails, still streak & navigate with fallback name
+                                scope.launch {
+                                    try {
+                                        StreakService.dailyCheckInFor(firebaseUser.uid)
+                                    } catch (_: Exception) { }
+                                    isLoading = false
+                                    Log.w("Firestore", "Error reading user doc", e)
+                                    onLoginSuccess(firebaseUser.displayName ?: "User")
+                                }
                             }
-                        }.addOnFailureListener { e ->
+                        } else {
                             isLoading = false
-                            Toast.makeText(context, "Failed to read profile: ${e.message}", Toast.LENGTH_LONG).show()
+                            Toast.makeText(context, "Authentication failed: missing user.", Toast.LENGTH_SHORT).show()
                         }
                     } else {
                         isLoading = false
@@ -225,6 +244,8 @@ private fun SignInUI(onNavigateToCreateAccount: () -> Unit, onLoginSuccess: (use
                         .addOnCompleteListener { task ->
                             if (task.isSuccessful) {
                                 val userId = auth.currentUser?.uid
+                                val displayNameFallback = auth.currentUser?.displayName ?: "User"
+
                                 if (userId != null) {
                                     db.collection("users").document(userId).get()
                                         .addOnSuccessListener { document ->
@@ -235,13 +256,26 @@ private fun SignInUI(onNavigateToCreateAccount: () -> Unit, onLoginSuccess: (use
                                             val fallbackEmail = auth.currentUser?.email
                                             val userName = docName ?: docDisplay ?: authName ?: fallbackEmail ?: "User"
                                             Log.d("Firebase", "Login Success. Name: $userName")
-                                            onLoginSuccess("Hopper")
+
+
+                                            scope.launch {
+                                                try {
+                                                    StreakService.dailyCheckInFor(userId)
+                                                } catch (_: Exception) { }
+                                                isLoading = false
+                                                onLoginSuccess(userName)
+                                            }
                                         }
                                         .addOnFailureListener { e ->
                                             isLoading = false
                                             Log.w("Firestore", "Error getting user document", e)
-                                            val fallback = auth.currentUser?.displayName ?: auth.currentUser?.email ?: "User"
-                                            onLoginSuccess("Hopper")
+                                            scope.launch {
+                                                try {
+                                                    StreakService.dailyCheckInFor(userId)
+                                                } catch (_: Exception) { }
+                                                isLoading = false
+                                                onLoginSuccess(displayNameFallback)
+                                            }
                                         }
                                 } else {
                                     isLoading = false
@@ -343,84 +377,24 @@ private fun CreateAccountUI(onNavigateBack: () -> Unit) {
     }
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {},
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
-            )
-        },
+        topBar = { TopAppBar(title = {}, navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back") } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)) },
         containerColor = Color.Transparent
     ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(horizontal = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                "Welcome to Hoppin",
-                fontSize = 32.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.DarkGray,
-                fontFamily = FontFamily.Serif,
-                fontStyle = FontStyle.Italic
-            )
+        Column(modifier = Modifier.fillMaxSize().padding(paddingValues).padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("Welcome to Hoppin", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color.DarkGray, fontFamily = FontFamily.Serif, fontStyle = FontStyle.Italic)
             Spacer(modifier = Modifier.height(26.dp))
-            Text(
-                "Register",
-                fontSize = 26.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.DarkGray,
-                fontFamily = FontFamily.Serif,
-                fontStyle = FontStyle.Italic
-            )
+            Text("Register", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Color.DarkGray, fontFamily = FontFamily.Serif, fontStyle = FontStyle.Italic)
             Spacer(modifier = Modifier.height(32.dp))
 
             OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Name") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
             Spacer(modifier = Modifier.height(16.dp))
-            OutlinedTextField(
-                value = email,
-                onValueChange = { email = it },
-                label = { Text("Email") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
-            )
+            OutlinedTextField(value = email, onValueChange = { email = it }, label = { Text("Email") }, modifier = Modifier.fillMaxWidth(), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email))
             Spacer(modifier = Modifier.height(16.dp))
-            OutlinedTextField(
-                value = phoneNumber,
-                onValueChange = { phoneNumber = it },
-                label = { Text("Phone number") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone)
-            )
+            OutlinedTextField(value = phoneNumber, onValueChange = { phoneNumber = it }, label = { Text("Phone number") }, modifier = Modifier.fillMaxWidth(), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone))
             Spacer(modifier = Modifier.height(16.dp))
-            OutlinedTextField(
-                value = password,
-                onValueChange = { password = it },
-                label = { Text("Password") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
-            )
+            OutlinedTextField(value = password, onValueChange = { password = it }, label = { Text("Password") }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
             Spacer(modifier = Modifier.height(16.dp))
-            OutlinedTextField(
-                value = confirmPassword,
-                onValueChange = { confirmPassword = it },
-                label = { Text("Confirm password") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
-            )
+            OutlinedTextField(value = confirmPassword, onValueChange = { confirmPassword = it }, label = { Text("Confirm password") }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
             Spacer(modifier = Modifier.height(32.dp))
 
             if (isLoading) {
@@ -445,11 +419,7 @@ private fun CreateAccountUI(onNavigateBack: () -> Unit) {
                                     val userId = auth.currentUser?.uid
                                     if (userId != null) {
                                         val db = FirebaseFirestore.getInstance()
-                                        val userMap = hashMapOf(
-                                            "name" to name.trim(),
-                                            "email" to email.trim(),
-                                            "phoneNumber" to phoneNumber.trim()
-                                        )
+                                        val userMap = hashMapOf("name" to name.trim(), "email" to email.trim(), "phoneNumber" to phoneNumber.trim())
                                         db.collection("users").document(userId).set(userMap)
                                             .addOnSuccessListener {
                                                 isLoading = false
@@ -523,15 +493,7 @@ private fun TermsAndPrivacyText() {
         }
         pop()
     }
-
-    ClickableText(
-        text = annotatedString,
-        onClick = { offset ->
-            // TODO: open the correct URL or in-app screen
-        },
-        style = LocalTextStyle.current.copy(textAlign = TextAlign.Center, color = Color.Gray, fontSize = 12.sp),
-        modifier = Modifier.padding(horizontal = 16.dp)
-    )
+    ClickableText(text = annotatedString, onClick = { }, style = LocalTextStyle.current.copy(textAlign = TextAlign.Center, color = Color.Gray, fontSize = 12.sp), modifier = Modifier.padding(horizontal = 16.dp))
 }
 
 /**
