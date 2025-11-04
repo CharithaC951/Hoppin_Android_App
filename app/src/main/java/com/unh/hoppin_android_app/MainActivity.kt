@@ -19,7 +19,6 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.google.android.libraries.places.api.Places
-import com.unh.hoppin_android_app.ui.DiscoverListScreen
 import com.unh.hoppin_android_app.ui.theme.Hoppin_Android_AppTheme
 import kotlinx.coroutines.launch
 
