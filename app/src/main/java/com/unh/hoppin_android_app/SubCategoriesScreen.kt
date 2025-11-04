@@ -3,6 +3,7 @@ package com.unh.hoppin_android_app
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -36,21 +37,6 @@ import kotlin.collections.getOrNull
  * SubCategoriesScreen
  *
  * Displays subcategories for a selected top-level category.
- *
- * The screen:
- *  - Loads recommendations (thumbnails) for the selected category if they're not already present in the view model
- *  - Shows a horizontally scrollable row of FilterChips for the available subcategories
- *  - Uses a HorizontalPager to render a full-bleed "pane" per subcategory
- *
- * Notes:
- *  - The RecommendationViewModel is used as the data source and may perform network requests.
- *  - The pager and chips are kept in sync: tapping a chip scrolls the pager and changing the page highlights the chip.
- *
- * @param navController NavController used for back navigation.
- * @param catId The id of the main category to display subcategories for.
- * @param vm RecommendationViewModel providing recommendation data and thumbnails.
- * @param center The center LatLng used when fetching recommendations (defaults to a New Haven center).
- * @param perCategory How many items to request per category (useful to limit network usage).
  */
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -62,21 +48,11 @@ fun SubCategoriesScreen(
     perCategory: Int = 20
 ) {
     val context = LocalContext.current
-
-    // Observe the view model UI state
     val ui = vm.ui.collectAsState().value
 
-    // Resolve the Category and its SubCategory list from the repository
     val category: Category? = remember(catId) { CategoriesRepository.getCategoryById(catId) }
     val subs: List<SubCategory> = remember(catId) { CategoriesRepository.subCategoriesOf(catId) }
 
-    /**
-     * When the screen appears or the category changes:
-     *  - If the view model has no sections loaded, request data from the network (vm.load).
-     *  - If sections already exist, derive (filter/sort) locally based on the provided center.
-     *
-     * This keeps network calls minimal and allows local re-filtering when center changes.
-     */
     LaunchedEffect(catId) {
         val oneCat = category?.let { listOf(it) } ?: emptyList()
         if (ui.sections.isEmpty()) {
@@ -88,12 +64,10 @@ fun SubCategoriesScreen(
                 fetchThumbnails = true
             )
         } else {
-            // Derive results locally: cheaper when we already have data in memory
             vm.deriveLocally(center = center, categories = oneCat, perCategory = perCategory)
         }
     }
 
-    // Pager state for the HorizontalPager — number of pages equals number of subs (at least 1)
     val pagerState = rememberPagerState(pageCount = { subs.size.coerceAtLeast(1) })
     val scope = rememberCoroutineScope()
 
@@ -109,8 +83,6 @@ fun SubCategoriesScreen(
             )
         }
     ) { padding ->
-
-        // Handle basic UI states: loading, error, or main content
         when {
             ui.loading -> Box(
                 Modifier
@@ -141,9 +113,7 @@ fun SubCategoriesScreen(
                             FilterChip(
                                 selected = pagerState.currentPage == index,
                                 onClick = {
-                                    scope.launch {
-                                        pagerState.animateScrollToPage(index)
-                                    }
+                                    scope.launch { pagerState.animateScrollToPage(index) }
                                 },
                                 label = { Text(sub.title) }
                             )
@@ -155,17 +125,26 @@ fun SubCategoriesScreen(
                     HorizontalPager(
                         state = pagerState,
                         pageSpacing = 16.dp,
-                        contentPadding = PaddingValues(0.dp),        // full-bleed width
+                        contentPadding = PaddingValues(0.dp),
                         modifier = Modifier.fillMaxSize()
                     ) { page ->
-                        // Safe-get the subcategory for the page (getOrNull returns null if out-of-range)
                         val sub = subs.getOrNull(page)
-                        // SubPaneCard renders a large visual card for the subcategory
-                        SubPaneCard(
-                            title = sub?.title ?: "",
-                            image = sub?.image ?: R.drawable.museum, // fallback image if something is wrong
-                            height = 720.dp
-                        )
+                        val resolvedType = resolveTypeFromTitle(sub?.title.orEmpty())
+
+                        // ✅ Tap the pane to open the list for that sub-type
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clickable(enabled = resolvedType.isNotEmpty()) {
+                                    navController.navigate("discover?type=$resolvedType&categoryId=")
+                                }
+                        ) {
+                            SubPaneCard(
+                                title = sub?.title ?: "",
+                                image = sub?.image ?: R.drawable.museum,
+                                height = 720.dp
+                            )
+                        }
                     }
                 }
             }
@@ -176,13 +155,7 @@ fun SubCategoriesScreen(
 /**
  * SubPaneCard
  *
- * Large visual card used for each pager page. Shows:
- *  - A full-bleed image background
- *  - A bottom overlay with the subcategory title and a small decorative row
- *
- * @param title Title to display in the overlay.
- * @param image Drawable resource id to show as the background.
- * @param height Card height (default is 420.dp in other contexts; here overridden to 720.dp in pager).
+ * Large visual card used for each pager page.
  */
 @Composable
 private fun SubPaneCard(
@@ -228,7 +201,6 @@ private fun SubPaneCard(
                     )
                     Spacer(Modifier.height(4.dp))
 
-                    // Decorative row — can be replaced with ratings or tag chips later
                     Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                         repeat(5) { Text("•", color = Color.White.copy(alpha = 0.9f)) }
                     }
@@ -240,8 +212,6 @@ private fun SubPaneCard(
 
 /**
  * Preview for the SubCategoriesScreen.
- *
- * Shows the composable inside a simple column for quick design-time testing.
  */
 @Preview(showBackground = true)
 @Composable
@@ -254,4 +224,72 @@ fun SubCategoriesPreview() {
             catId = 1,
         )
     }
+}
+
+/* ----------------------------- Helpers ----------------------------- */
+
+/**
+ * Maps pane titles to Places API / type strings.
+ * If the title isn't in the known map, we fall back to snake_case.
+ */
+private fun resolveTypeFromTitle(title: String): String {
+    val map = mapOf(
+        // Category 1
+        "Tourist Attraction" to "tourist_attraction",
+        "Museum" to "museum",
+        "Art Gallery" to "art_gallery",
+        "Park" to "park",
+
+        // Category 2
+        "Restaurant" to "restaurant",
+        "Restaurants" to "restaurant",
+        "Bar" to "bar",
+        "Bars" to "bar",
+        "Cafe" to "cafe",
+        "Cafes" to "cafe",
+        "Bakery" to "bakery",
+        "Bakeries" to "bakery",
+
+        // Category 3
+        "Movie Theater" to "movie_theater",
+        "Night Club" to "night_club",
+        "Bowling Alley" to "bowling_alley",
+        "Casino" to "casino",
+
+        // Category 4
+        "Shopping Mall" to "shopping_mall",
+        "Clothing Store" to "clothing_store",
+        "Department Store" to "department_store",
+        "Store" to "store",
+        "Supermarket" to "supermarket",
+
+        // Category 5
+        "Spa" to "spa",
+        "Lodging" to "lodging",
+        "Campground" to "campground",
+
+        // Category 6
+        "Gym" to "gym",
+        "Pharmacy" to "pharmacy",
+        "Doctor" to "doctor",
+        "Beauty Salon" to "beauty_salon",
+
+        // Category 7
+        "Hospital" to "hospital",
+        "Police" to "police",
+        "Fire Station" to "fire_station",
+
+        // Category 8
+        "Post Office" to "post_office",
+        "Bank" to "bank",
+        "ATM" to "atm",
+        "Gas Station" to "gas_station",
+        "Car Repair" to "car_repair"
+    )
+
+    return map[title] ?: title
+        .trim()
+        .lowercase()
+        .replace(Regex("[^a-z0-9]+"), "_")
+        .trim('_')
 }
