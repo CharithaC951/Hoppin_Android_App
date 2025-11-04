@@ -19,8 +19,10 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.google.android.libraries.places.api.Places
+import com.unh.hoppin_android_app.ui.DiscoverListScreen
 import com.unh.hoppin_android_app.ui.theme.Hoppin_Android_AppTheme
 import kotlinx.coroutines.launch
+
 
 const val USER_NAME_ARG = "Hopper"
 const val HOME_ROUTE_PATTERN = "Home/{$USER_NAME_ARG}"
@@ -54,9 +56,7 @@ class MainActivity : ComponentActivity() {
                     val currentBackStackEntry by navController.currentBackStackEntryAsState()
                     val currentRoute = currentBackStackEntry?.destination?.route
 
-                    val showBottomBar = currentRoute != "login" // hide bar on login screen
-
-
+                    val showBottomBar = currentRoute != "login"
                     if (showBottomBar) {
                         Scaffold(
                             bottomBar = {
@@ -113,7 +113,21 @@ class MainActivity : ComponentActivity() {
                                     val catId = backStackEntry.arguments!!.getInt("catId")
                                     SubCategoriesScreen(navController = navController, catId = catId)
                                 }
-
+                                composable(
+                                    route = "discover?type={type}&categoryId={categoryId}",
+                                    arguments = listOf(
+                                        navArgument("type") { type = NavType.StringType; defaultValue = "" },
+                                        navArgument("categoryId") { type = NavType.IntType; defaultValue = -1 }
+                                    )
+                                ) { backStackEntry ->
+                                    val typeArg = backStackEntry.arguments?.getString("type").orEmpty()
+                                    val categoryId = backStackEntry.arguments?.getInt("categoryId") ?: -1
+                                    DiscoverListScreen(
+                                        selectedTypes = typeArg.split(',').filter { it.isNotBlank() },
+                                        selectedCategoryId = categoryId.takeIf { it != -1 },
+                                        onBack = { navController.popBackStack() }
+                                    )
+                                }
                             }
                         }
                     } else {
@@ -157,7 +171,21 @@ class MainActivity : ComponentActivity() {
                                 val catId = backStackEntry.arguments!!.getInt("catId")
                                 SubCategoriesScreen(navController = navController, catId = catId)
                             }
-
+                            composable(
+                                route = "discover?type={type}&categoryId={categoryId}",
+                                arguments = listOf(
+                                    navArgument("type") { type = NavType.StringType; defaultValue = "" },
+                                    navArgument("categoryId") { type = NavType.IntType; defaultValue = -1 }
+                                )
+                            ) { backStackEntry ->
+                                val typeArg = backStackEntry.arguments?.getString("type").orEmpty()
+                                val categoryId = backStackEntry.arguments?.getInt("categoryId") ?: -1
+                                DiscoverListScreen(
+                                    selectedTypes = typeArg.split(',').filter { it.isNotBlank() },
+                                    selectedCategoryId = categoryId.takeIf { it != -1 },
+                                    onBack = { navController.popBackStack() }
+                                )
+                            }
                         }
                     }
                 }
