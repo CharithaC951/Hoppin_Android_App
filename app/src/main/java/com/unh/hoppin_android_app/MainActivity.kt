@@ -124,6 +124,19 @@ class MainActivity : ComponentActivity() {
                                     DiscoverListScreen(
                                         selectedTypes = typeArg.split(',').filter { it.isNotBlank() },
                                         selectedCategoryId = categoryId.takeIf { it != -1 },
+                                        onBack = { navController.popBackStack() },
+                                        onPlaceClick = { uiPlace ->
+                                            navController.navigate("place/${uiPlace.id}")
+                                        }
+                                    )
+                                }
+                                composable(
+                                    route = "place/{placeId}",
+                                    arguments = listOf(navArgument("placeId") { type = NavType.StringType })
+                                ) { backStackEntry ->
+                                    val placeId = backStackEntry.arguments!!.getString("placeId")!!
+                                    PlaceDetailsScreen(
+                                        placeId = placeId,
                                         onBack = { navController.popBackStack() }
                                     )
                                 }
@@ -182,6 +195,19 @@ class MainActivity : ComponentActivity() {
                                 DiscoverListScreen(
                                     selectedTypes = typeArg.split(',').filter { it.isNotBlank() },
                                     selectedCategoryId = categoryId.takeIf { it != -1 },
+                                    onBack = { navController.popBackStack() },
+                                    onPlaceClick = { uiPlace ->
+                                        navController.navigate("place/${uiPlace.id}")
+                                    }
+                                )
+                            }
+                            composable(
+                                route = "place/{placeId}",
+                                arguments = listOf(navArgument("placeId") { type = NavType.StringType })
+                            ) { backStackEntry ->
+                                val placeId = backStackEntry.arguments!!.getString("placeId")!!
+                                PlaceDetailsScreen(
+                                    placeId = placeId,
                                     onBack = { navController.popBackStack() }
                                 )
                             }
