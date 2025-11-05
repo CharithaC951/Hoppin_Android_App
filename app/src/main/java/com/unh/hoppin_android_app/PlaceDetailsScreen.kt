@@ -38,6 +38,10 @@ import androidx.compose.foundation.pager.rememberPagerState
 import com.google.android.libraries.places.api.model.PhotoMetadata
 import kotlin.collections.isNotEmpty
 import kotlin.collections.take
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.filled.Share
+
 
 private fun extractEditorialSummary(place: Place): String? {
     val s = place.editorialSummary ?: return null
@@ -115,6 +119,12 @@ fun PlaceDetailsScreen(
     var openingNow by remember { mutableStateOf<Boolean?>(null) }
     var photos by remember { mutableStateOf<List<Bitmap>>(emptyList()) }
     var editorial by remember { mutableStateOf<String?>(null) }
+    var isFav by remember { mutableStateOf(false) }
+
+    LaunchedEffect(placeId, name, address, rating, ratingsTotal) {
+        // initialize fav state whenever details load
+        isFav = FavoritesStore.contains(placeId)
+    }
 
     LaunchedEffect(placeId) {
         loading = true
@@ -203,7 +213,12 @@ fun PlaceDetailsScreen(
         loading = false
     }
 
-
+    fun buildUiPlaceForFavorites(): UiPlace =
+        UiPlace(
+            id = placeId,
+            title = name ?: "",
+            photo = photos.firstOrNull() ?: null,
+        )
 
     Scaffold(
         topBar = {
@@ -307,7 +322,59 @@ fun PlaceDetailsScreen(
 
                     Spacer(Modifier.height(16.dp))
 
-                    Spacer(Modifier.height(16.dp))
+                    Row(
+                        modifier = Modifier
+                            .padding(top = 12.dp)
+                            .fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        // Favorite
+                        FilledTonalButton(
+                            onClick = {
+                                if (isFav) {
+                                    FavoritesStore.remove(placeId)
+                                    isFav = false
+                                } else {
+                                    FavoritesStore.add(buildUiPlaceForFavorites())
+                                    isFav = true
+                                }
+                            },
+                            shape = RoundedCornerShape(14.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isFav) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                                contentDescription = if (isFav) "Remove from favorites" else "Add to favorites"
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(if (isFav) "Favorited" else "Favorite")
+                        }
+
+                        Spacer(Modifier.width(8.dp))
+
+                        // Share
+                        OutlinedButton(
+                            onClick = {
+                                val ll = latLng
+                                val gmaps = if (ll != null) {
+                                    "https://www.google.com/maps/search/?api=1&query=${ll.latitude},${ll.longitude}&query_place_id=$placeId"
+                                } else {
+                                    "https://www.google.com/maps/search/?api=1&query=${Uri.encode(name ?: address ?: "")}"
+                                }
+                                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                    type = "text/plain"
+                                    putExtra(Intent.EXTRA_SUBJECT, name ?: "Place")
+                                    putExtra(Intent.EXTRA_TEXT, "${name ?: ""}\n$gmaps")
+                                }
+                                startActivity(ctx, Intent.createChooser(shareIntent, "Share place"), null)
+                            },
+                            shape = RoundedCornerShape(14.dp)
+                        ) {
+                            Icon(Icons.Filled.Share, contentDescription = "Share")
+                            Spacer(Modifier.width(6.dp))
+                            Text("Share")
+                        }
+                    }
+
                     Column(Modifier.padding(horizontal = 16.dp)) {
                         Text("About", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                         Spacer(Modifier.height(8.dp))
@@ -317,8 +384,6 @@ fun PlaceDetailsScreen(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                     }
-
-
 
                     // Quick actions
                     Row(
