@@ -33,7 +33,66 @@ import kotlinx.coroutines.withContext
 import android.content.Intent
 import androidx.core.content.ContextCompat.startActivity
 import com.google.android.libraries.places.api.net.FetchPlaceRequest
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import com.google.android.libraries.places.api.model.PhotoMetadata
+import kotlin.collections.isNotEmpty
+import kotlin.collections.take
 
+private fun extractEditorialSummary(place: Place): String? {
+    val s = place.editorialSummary ?: return null
+    runCatching { s.javaClass.getMethod("getOverview").invoke(s) as? String }
+        .getOrNull()
+        ?.let { return it }
+    runCatching { s.javaClass.getMethod("getText").invoke(s) as? String }
+        .getOrNull()
+        ?.let { return it }
+    return null
+}
+
+private fun priceLevelToText(priceLevel: Int?): String? = when (priceLevel) {
+    0 -> "$"
+    1 -> "$"
+    2 -> "$$"
+    3 -> "$$$"
+    4 -> "$$$$"
+    else -> null
+}
+
+private fun buildFallbackDescription(
+    name: String?,
+    address: String?,
+    types: List<Place.Type>?,
+    rating: Double?,
+    ratingsTotal: Int?,
+    openingNow: Boolean?,
+    priceLevel: Int?
+): String {
+    val city = address?.substringAfterLast(",")?.trim() // crude city-ish pull
+    val typeText = types?.firstOrNull()?.name
+        ?.lowercase()
+        ?.replace('_', ' ')
+        ?.replaceFirstChar { it.uppercase() }
+
+    val priceText = priceLevelToText(priceLevel)
+    val parts = mutableListOf<String>()
+
+    if (typeText != null && city != null) parts += "$typeText in $city"
+    else if (typeText != null) parts += typeText
+    else if (city != null) parts += "Located in $city"
+
+    rating?.let { r ->
+        val base = "Rated ${"%.1f".format(r)}"
+        parts += if ((ratingsTotal ?: 0) > 0) "$base (${ratingsTotal} reviews)" else base
+    }
+
+    openingNow?.let { parts += if (it) "Open now" else "Closed now" }
+    priceText?.let { parts += it }
+
+    val lead = name ?: "This place"
+    return listOfNotNull(lead, parts.takeIf { it.isNotEmpty() }?.joinToString(" · "))
+        .joinToString(" — ")
+}
 
 @Composable
 fun PlaceDetailsScreen(
@@ -54,6 +113,8 @@ fun PlaceDetailsScreen(
     var latLng by remember { mutableStateOf<com.google.android.gms.maps.model.LatLng?>(null) }
     var photo by remember { mutableStateOf<Bitmap?>(null) }
     var openingNow by remember { mutableStateOf<Boolean?>(null) }
+    var photos by remember { mutableStateOf<List<Bitmap>>(emptyList()) }
+    var editorial by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(placeId) {
         loading = true
@@ -71,11 +132,24 @@ fun PlaceDetailsScreen(
                 Place.Field.OPENING_HOURS,
                 Place.Field.PHOTO_METADATAS,
                 Place.Field.LAT_LNG,
-                Place.Field.BUSINESS_STATUS
+                Place.Field.BUSINESS_STATUS,
+                Place.Field.EDITORIAL_SUMMARY,
+                Place.Field.TYPES,
+                Place.Field.PRICE_LEVEL
             )
             val fetch = FetchPlaceRequest.builder(placeId, fields).build()
             val fetched = withContext(Dispatchers.IO) { Tasks.await(client.fetchPlace(fetch)) }
             val p = fetched.place
+            editorial = extractEditorialSummary(p)?.trim()
+                ?: buildFallbackDescription(
+                    name = p.name,
+                    address = p.address,
+                    types = p.types,
+                    rating = p.rating,
+                    ratingsTotal = p.userRatingsTotal,
+                    openingNow = openingNow,           // set a few lines later; we’ll recompute below
+                    priceLevel = p.priceLevel
+                )
 
             name = p.name
             rating = p.rating
@@ -94,14 +168,34 @@ fun PlaceDetailsScreen(
                 p.businessStatus?.name?.contains("OPEN", ignoreCase = true)
             }
 
-            val meta = p.photoMetadatas?.firstOrNull()
-            if (meta != null) {
-                val photoReq = FetchPhotoRequest.builder(meta)
-                    .setMaxWidth(1600)
-                    .setMaxHeight(1000)
-                    .build()
-                val bmp = withContext(Dispatchers.IO) { Tasks.await(client.fetchPhoto(photoReq)).bitmap }
-                photo = bmp
+            if (extractEditorialSummary(p).isNullOrBlank()) {
+                editorial = buildFallbackDescription(
+                    name = p.name,
+                    address = p.address,
+                    types = p.types,
+                    rating = p.rating,
+                    ratingsTotal = p.userRatingsTotal,
+                    openingNow = openingNow,
+                    priceLevel = p.priceLevel
+                )
+            }
+
+            val metas: List<PhotoMetadata> = p.photoMetadatas ?: emptyList()
+            if (metas.isNotEmpty()) {
+                val take = metas.take(7)
+                val bitmaps = mutableListOf<Bitmap>()
+                for (m in take) {
+                    runCatching {
+                        val photoReq = FetchPhotoRequest.builder(m)
+                            .setMaxWidth(1600)
+                            .setMaxHeight(1000)
+                            .build()
+                        val bmp = withContext(Dispatchers.IO) { Tasks.await(client.fetchPhoto(photoReq)).bitmap }
+                        bitmaps += bmp
+                    }
+                }
+                photos = bitmaps
+                photo = bitmaps.firstOrNull()
             }
         }.onFailure {
             error = it.message ?: "Failed to load place"
@@ -144,18 +238,47 @@ fun PlaceDetailsScreen(
                         .verticalScroll(rememberScrollState())
                         .padding(inner)
                 ) {
-                    // Hero image (from Places API)
-                    if (photo != null) {
-                        Image(
-                            bitmap = photo!!.asImageBitmap(),
-                            contentDescription = name,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(260.dp),
-                            contentScale = ContentScale.Crop
-                        )
+                    // --- Carousel ---
+                    if (photos.isNotEmpty()) {
+                        val pagerState = rememberPagerState(initialPage = 0, pageCount = { photos.size })
+                        Column {
+                            HorizontalPager(
+                                state = pagerState,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(260.dp)
+                            ) { page ->
+                                Image(
+                                    bitmap = photos[page].asImageBitmap(),
+                                    contentDescription = name,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
+                            // Dots
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 8.dp),
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                repeat(photos.size) { index ->
+                                    val active = pagerState.currentPage == index
+                                    Box(
+                                        modifier = Modifier
+                                            .padding(3.dp)
+                                            .size(if (active) 8.dp else 6.dp)
+                                            .background(
+                                                if (active) MaterialTheme.colorScheme.primary
+                                                else MaterialTheme.colorScheme.outlineVariant,
+                                                RoundedCornerShape(50)
+                                            )
+                                    )
+                                }
+                            }
+                        }
                     } else {
-                        // Soft fallback banner
+                        // Fallback if no photos
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -183,6 +306,19 @@ fun PlaceDetailsScreen(
                     }
 
                     Spacer(Modifier.height(16.dp))
+
+                    Spacer(Modifier.height(16.dp))
+                    Column(Modifier.padding(horizontal = 16.dp)) {
+                        Text("About", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = editorial ?: "No description available.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+
+
 
                     // Quick actions
                     Row(
