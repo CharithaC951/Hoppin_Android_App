@@ -110,6 +110,9 @@ class MainActivity : ComponentActivity() {
                                     val catId = backStackEntry.arguments!!.getInt("catId")
                                     SubCategoriesScreen(navController = navController, catId = catId)
                                 }
+                                composable("settings") {
+                                    SettingsScreen(navController = navController)
+                                }
                                 composable(
                                     route = "discover?type={type}&categoryId={categoryId}",
                                     arguments = listOf(
@@ -177,6 +180,9 @@ class MainActivity : ComponentActivity() {
                                     mapsApiKey = MAPS_API_KEY,
                                     navController = navController
                                 )
+                            }
+                            composable("settings") {
+                                SettingsScreen(navController = navController)
                             }
                             composable("gamification") {
                                 GamificationScreen(navController = navController)
