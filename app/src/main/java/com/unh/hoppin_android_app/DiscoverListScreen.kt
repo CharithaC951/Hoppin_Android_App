@@ -31,6 +31,7 @@ import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.tasks.Tasks
 import com.google.android.libraries.places.api.Places
 import com.google.android.libraries.places.api.model.CircularBounds
+import com.google.android.libraries.places.api.model.PhotoMetadata
 import com.google.android.libraries.places.api.model.Place
 import com.google.android.libraries.places.api.net.FetchPhotoRequest
 import com.google.android.libraries.places.api.net.FetchPlaceRequest
@@ -38,6 +39,8 @@ import com.google.android.libraries.places.api.net.PlacesClient
 import com.google.android.libraries.places.api.net.SearchNearbyRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlin.math.*
+
 
 @Composable
 fun DiscoverListScreen(
@@ -53,7 +56,8 @@ fun DiscoverListScreen(
     maxResults: Int = 20,
 
     onBack: () -> Unit = {},
-    onPlaceClick: (UiPlace) -> Unit = {}
+    onPlaceClick: (UiPlace) -> Unit = {},
+    onOpenFavorites: () -> Unit = {}
 ) {
     val context = LocalContext.current
 
@@ -74,16 +78,14 @@ fun DiscoverListScreen(
         }
     }
 
-    val safeCenter = center ?: LatLng(41.3100, -72.9300) // New Haven fallback
+    val safeCenter = center ?: LatLng(41.3100, -72.9300)
     var ui by remember { mutableStateOf(ListUi(loading = true)) }
-    var favorites by remember { mutableStateOf(setOf<String>()) }
 
     LaunchedEffect(activeTypes, safeCenter, radiusMeters, maxResults, placesClient, context) {
         ui = ui.copy(loading = true, error = null)
         val client = placesClient ?: Places.createClient(context)
         val result = runCatching {
-            // ⬇️ Per-type search + photos
-            loadNearbySectionsWithPhotos(
+            loadNearbySectionsWithPhotosAndDistance(
                 client = client,
                 center = safeCenter,
                 typesOrdered = activeTypes,
@@ -104,6 +106,11 @@ fun DiscoverListScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onOpenFavorites) {
+                        Icon(Icons.Filled.Favorite, contentDescription = "Favourites")
                     }
                 }
             )
@@ -160,12 +167,11 @@ fun DiscoverListScreen(
                             } else {
                                 items(section.items, key = { it.id }) { place ->
                                     PlaceCardMinimal(
-                                        place = place.copy(isFavorite = favorites.contains(place.id)),
+                                        place = place,
                                         onClick = { onPlaceClick(place) },
                                         onToggleFavorite = {
-                                            favorites = favorites.toMutableSet().apply {
-                                                if (contains(place.id)) remove(place.id) else add(place.id)
-                                            }
+
+                                            onOpenFavorites()
                                         }
                                     )
                                 }
@@ -178,11 +184,12 @@ fun DiscoverListScreen(
     }
 }
 
+
 data class UiPlace(
     val id: String,
     val title: String,
     val photo: Bitmap?,
-    val isFavorite: Boolean = false
+    val distanceMeters: Int? = null
 )
 
 data class UiSection(
@@ -207,7 +214,8 @@ val CategoryToTypes: Map<Int, List<String>> = mapOf(
     8 to listOf("post_office", "bank", "atm", "gas_station", "car_repair")
 )
 
-private suspend fun loadNearbySectionsWithPhotos(
+
+private suspend fun loadNearbySectionsWithPhotosAndDistance(
     client: PlacesClient,
     center: LatLng,
     typesOrdered: List<String>,
@@ -216,7 +224,7 @@ private suspend fun loadNearbySectionsWithPhotos(
 ): List<UiSection> = withContext(Dispatchers.IO) {
 
     if (typesOrdered.isEmpty()) {
-        val generic = searchNearbyOneTypeWithPhotos(
+        val generic = searchNearbyOneTypeHydrated(
             client = client,
             center = center,
             type = null,
@@ -228,7 +236,7 @@ private suspend fun loadNearbySectionsWithPhotos(
 
     val sections = mutableListOf<UiSection>()
     for (t in typesOrdered) {
-        val items = searchNearbyOneTypeWithPhotos(
+        val items = searchNearbyOneTypeHydrated(
             client = client,
             center = center,
             type = t,
@@ -240,8 +248,7 @@ private suspend fun loadNearbySectionsWithPhotos(
     sections
 }
 
-
-private fun searchNearbyOneTypeWithPhotos(
+private fun searchNearbyOneTypeHydrated(
     client: PlacesClient,
     center: LatLng,
     type: String?,
@@ -250,6 +257,7 @@ private fun searchNearbyOneTypeWithPhotos(
 ): List<UiPlace> {
     val locationRestriction = CircularBounds.newInstance(center, radiusMeters.toDouble())
 
+    // Keep Nearby response light
     val nearbyFields = listOf(Place.Field.ID, Place.Field.NAME)
 
     val nearbyReqBuilder = SearchNearbyRequest
@@ -259,36 +267,39 @@ private fun searchNearbyOneTypeWithPhotos(
     if (!type.isNullOrBlank()) {
         nearbyReqBuilder.setIncludedTypes(listOf(type))
     }
-    val nearbyReq = nearbyReqBuilder.build()
-    val nearbyResp = runCatching { Tasks.await(client.searchNearby(nearbyReq)) }.getOrNull()
+
+    val nearbyResp = runCatching { Tasks.await(client.searchNearby(nearbyReqBuilder.build())) }.getOrNull()
         ?: return emptyList()
 
     val candidates = nearbyResp.places.orEmpty()
 
-    // For each candidate: FetchPlace (to get PHOTO_METADATAS), then FetchPhoto
     return candidates.mapNotNull { p ->
         val placeId = p.id ?: return@mapNotNull null
 
-        val fetchReq = FetchPlaceRequest
-            .builder(placeId, listOf(Place.Field.ID, Place.Field.NAME, Place.Field.PHOTO_METADATAS))
-            .build()
-        val fetched = runCatching { Tasks.await(client.fetchPlace(fetchReq)) }.getOrNull()
-            ?: return@mapNotNull null
-
-        val place = fetched.place
-        val title = place.name ?: return@mapNotNull null
-
-        val photoMeta = place.photoMetadatas?.firstOrNull()
-        val bmp: Bitmap? = if (photoMeta != null) {
-            val photoReq = FetchPhotoRequest.builder(photoMeta)
-                .setMaxWidth(900)
-                .setMaxHeight(700)
+        val fetched = runCatching {
+            val req = FetchPlaceRequest
+                .builder(placeId, listOf(Place.Field.ID, Place.Field.NAME, Place.Field.PHOTO_METADATAS, Place.Field.LAT_LNG))
                 .build()
-            runCatching { Tasks.await(client.fetchPhoto(photoReq)).bitmap }.getOrNull()
+            Tasks.await(client.fetchPlace(req)).place
+        }.getOrNull() ?: return@mapNotNull null
+
+        val title = fetched.name ?: return@mapNotNull null
+
+        val meta: PhotoMetadata? = fetched.photoMetadatas?.firstOrNull()
+        val bmp: Bitmap? = if (meta != null) {
+            runCatching {
+                val photoReq = FetchPhotoRequest.builder(meta)
+                    .setMaxWidth(1280).setMaxHeight(720).build()
+                Tasks.await(client.fetchPhoto(photoReq)).bitmap
+            }.getOrNull()
         } else null
 
-        UiPlace(id = placeId, title = title, photo = bmp)
-    }
+        val d = fetched.latLng?.let { ll ->
+            distanceMeters(center.latitude, center.longitude, ll.latitude, ll.longitude).roundToInt()
+        }
+
+        UiPlace(id = placeId, title = title, photo = bmp, distanceMeters = d)
+    }.sortedBy { it.distanceMeters ?: Int.MAX_VALUE }
 }
 
 
@@ -306,7 +317,7 @@ private fun PlaceCardMinimal(
         elevation = CardDefaults.cardElevation(4.dp)
     ) {
         Column {
-            // Photo with consistent size and crop
+            // Photo (uniform size)
             if (place.photo != null) {
                 Image(
                     bitmap = place.photo.asImageBitmap(),
@@ -339,23 +350,28 @@ private fun PlaceCardMinimal(
                     .padding(horizontal = 14.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = place.title,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = place.title,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    place.distanceMeters?.let {
+                        Text(
+                            text = formatDistance(it),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
                 IconButton(onClick = onToggleFavorite) {
-                    if (place.isFavorite)
-                        Icon(Icons.Filled.Favorite, contentDescription = "Saved", tint = Color.Red)
-                    else
-                        Icon(Icons.Outlined.FavoriteBorder, contentDescription = "Save")
+                    Icon(Icons.Outlined.FavoriteBorder, contentDescription = "Save")
                 }
             }
         }
     }
 }
+
 
 private fun readableFromType(type: String): String {
     if (type.isBlank()) return "Discover"
@@ -388,3 +404,19 @@ private fun categoryTitle(categoryId: Int): String = when (categoryId) {
     8 -> "Essentials"
     else -> "Discover"
 }
+
+private fun distanceMeters(
+    lat1: Double, lon1: Double,
+    lat2: Double, lon2: Double
+): Double {
+    val R = 6371000.0
+    val dLat = Math.toRadians(lat2 - lat1)
+    val dLon = Math.toRadians(lon2 - lon1)
+    val a = sin(dLat / 2).pow(2.0) +
+            cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) *
+            sin(dLon / 2).pow(2.0)
+    return R * 2 * atan2(sqrt(a), sqrt(1 - a))
+}
+
+private fun formatDistance(meters: Int): String =
+    if (meters >= 1000) String.format("%.1f km away", meters / 1000.0) else "$meters m away"
