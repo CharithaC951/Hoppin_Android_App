@@ -3,6 +3,7 @@
 package com.unh.hoppin_android_app
 
 import android.graphics.Bitmap
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -22,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -37,29 +39,40 @@ import com.google.android.libraries.places.api.net.FetchPhotoRequest
 import com.google.android.libraries.places.api.net.FetchPlaceRequest
 import com.google.android.libraries.places.api.net.PlacesClient
 import com.google.android.libraries.places.api.net.SearchNearbyRequest
+import com.unh.hoppin_android_app.FavoritesStore
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.*
 
+/* ------------------------------------------------------------------ */
+/* Screen                                                             */
+/* ------------------------------------------------------------------ */
 
 @Composable
 fun DiscoverListScreen(
     modifier: Modifier = Modifier,
-    // From NavHost
     selectedTypes: List<String> = emptyList(),
     selectedCategoryId: Int? = null,
-
-    // Optional injections
     placesClient: PlacesClient? = null,
     center: LatLng? = null,
     radiusMeters: Int = 5_000,
     maxResults: Int = 20,
-
     onBack: () -> Unit = {},
     onPlaceClick: (UiPlace) -> Unit = {},
     onOpenFavorites: () -> Unit = {}
 ) {
     val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
+    // observe favourites to render filled hearts
+    val favMap by com.unh.hoppin_android_app.FavoritesStore.items.collectAsState()
+    val favIds = remember(favMap) { favMap.keys }
+
+    // transient visual “just-added” for smoothness
+    var transientAdded by remember { mutableStateOf(setOf<String>()) }
 
     val dynamicTitle = remember(selectedTypes, selectedCategoryId) {
         when {
@@ -78,7 +91,7 @@ fun DiscoverListScreen(
         }
     }
 
-    val safeCenter = center ?: LatLng(41.3100, -72.9300)
+    val safeCenter = center ?: LatLng(41.3100, -72.9300) // New Haven fallback
     var ui by remember { mutableStateOf(ListUi(loading = true)) }
 
     LaunchedEffect(activeTypes, safeCenter, radiusMeters, maxResults, placesClient, context) {
@@ -114,7 +127,8 @@ fun DiscoverListScreen(
                     }
                 }
             )
-        }
+        },
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
     ) { inner ->
         when {
             ui.loading -> Box(
@@ -148,7 +162,6 @@ fun DiscoverListScreen(
                         }
                     } else {
                         ui.sections.forEach { section ->
-                            // Header
                             item(key = "header-${section.type}") {
                                 Text(
                                     text = readableFromType(section.type),
@@ -156,7 +169,6 @@ fun DiscoverListScreen(
                                     fontWeight = FontWeight.SemiBold
                                 )
                             }
-
                             if (section.items.isEmpty()) {
                                 item(key = "empty-${section.type}") {
                                     Text(
@@ -166,12 +178,28 @@ fun DiscoverListScreen(
                                 }
                             } else {
                                 items(section.items, key = { it.id }) { place ->
+                                    val isFav = favIds.contains(place.id) || transientAdded.contains(place.id)
+
                                     PlaceCardMinimal(
                                         place = place,
+                                        isFavorited = isFav,
                                         onClick = { onPlaceClick(place) },
                                         onToggleFavorite = {
+                                            // add to favourites
+                                            FavoritesStore.add(place)
 
-                                            onOpenFavorites()
+                                            // transient visual state (in case flow is slow)
+                                            transientAdded = transientAdded + place.id
+                                            scope.launch {
+                                                delay(1200)
+                                                transientAdded = transientAdded - place.id
+                                            }
+
+                                            // snackbar feedback
+                                            scope.launch {
+                                                snackbarHostState.currentSnackbarData?.dismiss()
+                                                snackbarHostState.showSnackbar("Added to favourites")
+                                            }
                                         }
                                     )
                                 }
@@ -184,6 +212,9 @@ fun DiscoverListScreen(
     }
 }
 
+/* ------------------------------------------------------------------ */
+/* Data & Loading                                                      */
+/* ------------------------------------------------------------------ */
 
 data class UiPlace(
     val id: String,
@@ -214,7 +245,6 @@ val CategoryToTypes: Map<Int, List<String>> = mapOf(
     8 to listOf("post_office", "bank", "atm", "gas_station", "car_repair")
 )
 
-
 private suspend fun loadNearbySectionsWithPhotosAndDistance(
     client: PlacesClient,
     center: LatLng,
@@ -222,30 +252,13 @@ private suspend fun loadNearbySectionsWithPhotosAndDistance(
     radiusMeters: Int,
     maxResults: Int
 ): List<UiSection> = withContext(Dispatchers.IO) {
-
     if (typesOrdered.isEmpty()) {
-        val generic = searchNearbyOneTypeHydrated(
-            client = client,
-            center = center,
-            type = null,
-            radiusMeters = radiusMeters,
-            maxResults = maxResults
-        )
+        val generic = searchNearbyOneTypeHydrated(client, center, null, radiusMeters, maxResults)
         return@withContext listOf(UiSection(type = "places", items = generic))
     }
-
-    val sections = mutableListOf<UiSection>()
-    for (t in typesOrdered) {
-        val items = searchNearbyOneTypeHydrated(
-            client = client,
-            center = center,
-            type = t,
-            radiusMeters = radiusMeters,
-            maxResults = maxResults
-        )
-        sections += UiSection(type = t, items = items)
+    typesOrdered.map { t ->
+        UiSection(type = t, items = searchNearbyOneTypeHydrated(client, center, t, radiusMeters, maxResults))
     }
-    sections
 }
 
 private fun searchNearbyOneTypeHydrated(
@@ -255,42 +268,34 @@ private fun searchNearbyOneTypeHydrated(
     radiusMeters: Int,
     maxResults: Int
 ): List<UiPlace> {
-    val locationRestriction = CircularBounds.newInstance(center, radiusMeters.toDouble())
-
-    // Keep Nearby response light
+    val bounds = CircularBounds.newInstance(center, radiusMeters.toDouble())
     val nearbyFields = listOf(Place.Field.ID, Place.Field.NAME)
-
-    val nearbyReqBuilder = SearchNearbyRequest
-        .builder(locationRestriction, nearbyFields)
+    val nearbyReq = SearchNearbyRequest
+        .builder(bounds, nearbyFields)
         .setMaxResultCount(maxResults)
+        .apply { if (!type.isNullOrBlank()) setIncludedTypes(listOf(type)) }
+        .build()
 
-    if (!type.isNullOrBlank()) {
-        nearbyReqBuilder.setIncludedTypes(listOf(type))
-    }
-
-    val nearbyResp = runCatching { Tasks.await(client.searchNearby(nearbyReqBuilder.build())) }.getOrNull()
+    val nearbyResp = runCatching { Tasks.await(client.searchNearby(nearbyReq)) }.getOrNull()
         ?: return emptyList()
-
     val candidates = nearbyResp.places.orEmpty()
 
     return candidates.mapNotNull { p ->
         val placeId = p.id ?: return@mapNotNull null
-
         val fetched = runCatching {
-            val req = FetchPlaceRequest
-                .builder(placeId, listOf(Place.Field.ID, Place.Field.NAME, Place.Field.PHOTO_METADATAS, Place.Field.LAT_LNG))
-                .build()
+            val req = FetchPlaceRequest.builder(
+                placeId,
+                listOf(Place.Field.ID, Place.Field.NAME, Place.Field.PHOTO_METADATAS, Place.Field.LAT_LNG)
+            ).build()
             Tasks.await(client.fetchPlace(req)).place
         }.getOrNull() ?: return@mapNotNull null
 
         val title = fetched.name ?: return@mapNotNull null
-
         val meta: PhotoMetadata? = fetched.photoMetadatas?.firstOrNull()
         val bmp: Bitmap? = if (meta != null) {
             runCatching {
-                val photoReq = FetchPhotoRequest.builder(meta)
-                    .setMaxWidth(1280).setMaxHeight(720).build()
-                Tasks.await(client.fetchPhoto(photoReq)).bitmap
+                val preq = FetchPhotoRequest.builder(meta).setMaxWidth(1280).setMaxHeight(720).build()
+                Tasks.await(client.fetchPhoto(preq)).bitmap
             }.getOrNull()
         } else null
 
@@ -302,13 +307,21 @@ private fun searchNearbyOneTypeHydrated(
     }.sortedBy { it.distanceMeters ?: Int.MAX_VALUE }
 }
 
+/* ------------------------------------------------------------------ */
+/* Card UI (image + name + distance + heart + click feedback)         */
+/* ------------------------------------------------------------------ */
 
 @Composable
 private fun PlaceCardMinimal(
     place: UiPlace,
+    isFavorited: Boolean,
     onClick: () -> Unit,
     onToggleFavorite: () -> Unit
 ) {
+    // tiny “pressed” animation for tactile feedback
+    var pressed by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(targetValue = if (pressed) 0.88f else 1f, label = "fav-press")
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -317,7 +330,6 @@ private fun PlaceCardMinimal(
         elevation = CardDefaults.cardElevation(4.dp)
     ) {
         Column {
-            // Photo (uniform size)
             if (place.photo != null) {
                 Image(
                     bitmap = place.photo.asImageBitmap(),
@@ -358,20 +370,37 @@ private fun PlaceCardMinimal(
                         overflow = TextOverflow.Ellipsis
                     )
                     place.distanceMeters?.let {
-                        Text(
-                            text = formatDistance(it),
-                            style = MaterialTheme.typography.bodySmall
-                        )
+                        Text(text = formatDistance(it), style = MaterialTheme.typography.bodySmall)
                     }
                 }
-                IconButton(onClick = onToggleFavorite) {
-                    Icon(Icons.Outlined.FavoriteBorder, contentDescription = "Save")
+                IconButton(
+                    onClick = {
+                        pressed = true
+                        onToggleFavorite()
+                    },
+                    modifier = Modifier.graphicsLayer(scaleX = scale, scaleY = scale)
+                ) {
+                    if (isFavorited)
+                        Icon(Icons.Filled.Favorite, contentDescription = "Added", tint = Color.Red)
+                    else
+                        Icon(Icons.Outlined.FavoriteBorder, contentDescription = "Save")
                 }
             }
         }
     }
+
+    // auto-release the pressed animation
+    LaunchedEffect(pressed) {
+        if (pressed) {
+            delay(120)
+            pressed = false
+        }
+    }
 }
 
+/* ------------------------------------------------------------------ */
+/* Titles & Utils                                                      */
+/* ------------------------------------------------------------------ */
 
 private fun readableFromType(type: String): String {
     if (type.isBlank()) return "Discover"
@@ -406,8 +435,7 @@ private fun categoryTitle(categoryId: Int): String = when (categoryId) {
 }
 
 private fun distanceMeters(
-    lat1: Double, lon1: Double,
-    lat2: Double, lon2: Double
+    lat1: Double, lon1: Double, lat2: Double, lon2: Double
 ): Double {
     val R = 6371000.0
     val dLat = Math.toRadians(lat2 - lat1)
@@ -415,8 +443,8 @@ private fun distanceMeters(
     val a = sin(dLat / 2).pow(2.0) +
             cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) *
             sin(dLon / 2).pow(2.0)
-    return R * 2 * atan2(sqrt(a), sqrt(1 - a))
+    return R * 2 * atan2(kotlin.math.sqrt(a), kotlin.math.sqrt(1 - a))
 }
 
-private fun formatDistance(meters: Int): String =
-    if (meters >= 1000) String.format("%.1f km away", meters / 1000.0) else "$meters m away"
+private fun formatDistance(m: Int): String =
+    if (m >= 1000) String.format("%.1f km away", m / 1000.0) else "$m m away"
