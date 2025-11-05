@@ -38,10 +38,11 @@ import com.google.android.libraries.places.api.net.PlacesClient
 import com.google.android.libraries.places.api.net.SearchNearbyRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+
 @Composable
 fun DiscoverListScreen(
     modifier: Modifier = Modifier,
-    // From NavHost (your MainActivity already passes these)
+    // From NavHost
     selectedTypes: List<String> = emptyList(),
     selectedCategoryId: Int? = null,
 
@@ -56,7 +57,6 @@ fun DiscoverListScreen(
 ) {
     val context = LocalContext.current
 
-    // Build a friendly, dynamic title with no changes to your subcategory file
     val dynamicTitle = remember(selectedTypes, selectedCategoryId) {
         when {
             selectedTypes.size == 1 -> readableFromType(selectedTypes.first())
@@ -66,12 +66,11 @@ fun DiscoverListScreen(
         }
     }
 
-    // Active type filters derived from args
-    val activeTypes: Set<String> = remember(selectedTypes, selectedCategoryId) {
+    val activeTypes: List<String> = remember(selectedTypes, selectedCategoryId) {
         when {
-            selectedTypes.isNotEmpty() -> selectedTypes.map { it.trim() }.toSet()
-            selectedCategoryId != null -> CategoryToTypes[selectedCategoryId].orEmpty().toSet()
-            else -> emptySet()
+            selectedTypes.isNotEmpty() -> selectedTypes.map { it.trim() }
+            selectedCategoryId != null -> CategoryToTypes[selectedCategoryId].orEmpty()
+            else -> emptyList()
         }
     }
 
@@ -79,21 +78,21 @@ fun DiscoverListScreen(
     var ui by remember { mutableStateOf(ListUi(loading = true)) }
     var favorites by remember { mutableStateOf(setOf<String>()) }
 
-    // Load places + photos
     LaunchedEffect(activeTypes, safeCenter, radiusMeters, maxResults, placesClient, context) {
         ui = ui.copy(loading = true, error = null)
         val client = placesClient ?: Places.createClient(context)
         val result = runCatching {
-            loadNearbyPlacesWithPhotos(
+            // ⬇️ Per-type search + photos
+            loadNearbySectionsWithPhotos(
                 client = client,
                 center = safeCenter,
-                types = activeTypes,
+                typesOrdered = activeTypes,
                 radiusMeters = radiusMeters,
                 maxResults = maxResults
             )
         }
         ui = result.fold(
-            onSuccess = { ListUi(loading = false, items = it) },
+            onSuccess = { sections -> ListUi(loading = false, sections = sections) },
             onFailure = { ListUi(loading = false, error = it.message ?: "Failed to load places") }
         )
     }
@@ -134,16 +133,44 @@ fun DiscoverListScreen(
                     contentPadding = PaddingValues(vertical = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    items(ui.items, key = { it.id }) { place ->
-                        PlaceCardMinimal(
-                            place = place.copy(isFavorite = favorites.contains(place.id)),
-                            onClick = { onPlaceClick(place) },
-                            onToggleFavorite = {
-                                favorites = favorites.toMutableSet().apply {
-                                    if (contains(place.id)) remove(place.id) else add(place.id)
+                    if (ui.sections.isEmpty()) {
+                        item {
+                            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                Text("No near by places")
+                            }
+                        }
+                    } else {
+                        ui.sections.forEach { section ->
+                            // Header
+                            item(key = "header-${section.type}") {
+                                Text(
+                                    text = readableFromType(section.type),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+
+                            if (section.items.isEmpty()) {
+                                item(key = "empty-${section.type}") {
+                                    Text(
+                                        text = "No near by ${readableFromType(section.type)}",
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            } else {
+                                items(section.items, key = { it.id }) { place ->
+                                    PlaceCardMinimal(
+                                        place = place.copy(isFavorite = favorites.contains(place.id)),
+                                        onClick = { onPlaceClick(place) },
+                                        onToggleFavorite = {
+                                            favorites = favorites.toMutableSet().apply {
+                                                if (contains(place.id)) remove(place.id) else add(place.id)
+                                            }
+                                        }
+                                    )
                                 }
                             }
-                        )
+                        }
                     }
                 }
             }
@@ -158,11 +185,17 @@ data class UiPlace(
     val isFavorite: Boolean = false
 )
 
+data class UiSection(
+    val type: String,
+    val items: List<UiPlace>
+)
+
 data class ListUi(
     val loading: Boolean = false,
-    val items: List<UiPlace> = emptyList(),
+    val sections: List<UiSection> = emptyList(),
     val error: String? = null
 )
+
 val CategoryToTypes: Map<Int, List<String>> = mapOf(
     1 to listOf("tourist_attraction", "museum", "art_gallery", "park"),
     2 to listOf("restaurant", "bar", "cafe", "bakery"),
@@ -173,26 +206,67 @@ val CategoryToTypes: Map<Int, List<String>> = mapOf(
     7 to listOf("hospital", "police", "fire_station"),
     8 to listOf("post_office", "bank", "atm", "gas_station", "car_repair")
 )
-private suspend fun loadNearbyPlacesWithPhotos(
+
+private suspend fun loadNearbySectionsWithPhotos(
     client: PlacesClient,
     center: LatLng,
-    types: Set<String>,
+    typesOrdered: List<String>,
     radiusMeters: Int,
     maxResults: Int
-): List<UiPlace> = withContext(Dispatchers.IO) {
+): List<UiSection> = withContext(Dispatchers.IO) {
+
+    if (typesOrdered.isEmpty()) {
+        val generic = searchNearbyOneTypeWithPhotos(
+            client = client,
+            center = center,
+            type = null,
+            radiusMeters = radiusMeters,
+            maxResults = maxResults
+        )
+        return@withContext listOf(UiSection(type = "places", items = generic))
+    }
+
+    val sections = mutableListOf<UiSection>()
+    for (t in typesOrdered) {
+        val items = searchNearbyOneTypeWithPhotos(
+            client = client,
+            center = center,
+            type = t,
+            radiusMeters = radiusMeters,
+            maxResults = maxResults
+        )
+        sections += UiSection(type = t, items = items)
+    }
+    sections
+}
+
+
+private fun searchNearbyOneTypeWithPhotos(
+    client: PlacesClient,
+    center: LatLng,
+    type: String?,
+    radiusMeters: Int,
+    maxResults: Int
+): List<UiPlace> {
     val locationRestriction = CircularBounds.newInstance(center, radiusMeters.toDouble())
-    val placeFields = listOf(Place.Field.ID, Place.Field.NAME)
 
-    val request = SearchNearbyRequest
-        .builder(locationRestriction, placeFields)
+    val nearbyFields = listOf(Place.Field.ID, Place.Field.NAME)
+
+    val nearbyReqBuilder = SearchNearbyRequest
+        .builder(locationRestriction, nearbyFields)
         .setMaxResultCount(maxResults)
-        .apply { if (types.isNotEmpty()) setIncludedTypes(types.toList()) }
-        .build()
 
-    val nearbyResponse = Tasks.await(client.searchNearby(request))
-    val candidates = nearbyResponse.places
+    if (!type.isNullOrBlank()) {
+        nearbyReqBuilder.setIncludedTypes(listOf(type))
+    }
+    val nearbyReq = nearbyReqBuilder.build()
+    val nearbyResp = runCatching { Tasks.await(client.searchNearby(nearbyReq)) }.getOrNull()
+        ?: return emptyList()
 
-    candidates.mapNotNull { p ->
+    val candidates = nearbyResp.places.orEmpty()
+
+    // For each candidate: FetchPlace (to get PHOTO_METADATAS), then FetchPhoto
+    return candidates.mapNotNull { p ->
         val placeId = p.id ?: return@mapNotNull null
 
         val fetchReq = FetchPlaceRequest
@@ -216,6 +290,7 @@ private suspend fun loadNearbyPlacesWithPhotos(
         UiPlace(id = placeId, title = title, photo = bmp)
     }
 }
+
 
 @Composable
 private fun PlaceCardMinimal(
@@ -281,6 +356,7 @@ private fun PlaceCardMinimal(
         }
     }
 }
+
 private fun readableFromType(type: String): String {
     if (type.isBlank()) return "Discover"
     val special = mapOf(
