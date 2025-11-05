@@ -22,20 +22,19 @@ import com.google.android.libraries.places.api.Places
 import com.unh.hoppin_android_app.ui.theme.Hoppin_Android_AppTheme
 import kotlinx.coroutines.launch
 
-
 const val USER_NAME_ARG = "Hopper"
 const val HOME_ROUTE_PATTERN = "Home/{$USER_NAME_ARG}"
 
 class MainActivity : ComponentActivity() {
 
     private val PLACES_API_KEY = "AIzaSyDiNZujsy2lzuMOmacqsm4yrcWg2RFqobw"
-
     private val MAPS_API_KEY = "AIzaSyBZ5BHvRW4P9pLWKwGQh_WiyfMOQKfLONA"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val splash = installSplashScreen()
         super.onCreate(savedInstanceState)
         if (!Places.isInitialized()) {
+            // You can also use applicationContext here if you prefer
             Places.initialize(this, PLACES_API_KEY)
         }
         var keepOn = true
@@ -63,7 +62,6 @@ class MainActivity : ComponentActivity() {
                                     currentRoute = currentRoute,
                                     onItemClick = { route ->
                                         navController.navigate(route) {
-                                            // Avoid duplicate copies in the stack
                                             popUpTo(HOME_ROUTE_PATTERN) { inclusive = false }
                                             launchSingleTop = true
                                         }
@@ -127,7 +125,8 @@ class MainActivity : ComponentActivity() {
                                         onBack = { navController.popBackStack() },
                                         onPlaceClick = { uiPlace ->
                                             navController.navigate("place/${uiPlace.id}")
-                                        }
+                                        },
+                                        onOpenFavorites = { navController.navigate("favorites") }
                                     )
                                 }
                                 composable(
@@ -138,6 +137,15 @@ class MainActivity : ComponentActivity() {
                                     PlaceDetailsScreen(
                                         placeId = placeId,
                                         onBack = { navController.popBackStack() }
+                                    )
+                                }
+
+                                composable("favorites") {
+                                    com.unh.hoppin_android_app.FavoritesScreen(
+                                        onBack = { navController.popBackStack() },
+                                        onPlaceClick = { uiPlace ->
+                                            navController.navigate("place/${uiPlace.id}")
+                                        }
                                     )
                                 }
                             }
@@ -198,7 +206,8 @@ class MainActivity : ComponentActivity() {
                                     onBack = { navController.popBackStack() },
                                     onPlaceClick = { uiPlace ->
                                         navController.navigate("place/${uiPlace.id}")
-                                    }
+                                    },
+                                    onOpenFavorites = { navController.navigate("favorites") }
                                 )
                             }
                             composable(
@@ -209,6 +218,15 @@ class MainActivity : ComponentActivity() {
                                 PlaceDetailsScreen(
                                     placeId = placeId,
                                     onBack = { navController.popBackStack() }
+                                )
+                            }
+
+                            composable("favorites") {
+                                com.unh.hoppin_android_app.FavoritesScreen(
+                                    onBack = { navController.popBackStack() },
+                                    onPlaceClick = { uiPlace ->
+                                        navController.navigate("place/${uiPlace.id}")
+                                    }
                                 )
                             }
                         }
