@@ -39,12 +39,16 @@ import com.google.android.libraries.places.api.net.FetchPhotoRequest
 import com.google.android.libraries.places.api.net.FetchPlaceRequest
 import com.google.android.libraries.places.api.net.PlacesClient
 import com.google.android.libraries.places.api.net.SearchNearbyRequest
-import com.unh.hoppin_android_app.FavoritesStore
+import com.unh.hoppin_android_app.FavoritesRepositoryFirebase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlin.math.*
+import kotlin.math.roundToInt
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 /* ------------------------------------------------------------------ */
 /* Screen                                                             */
@@ -67,11 +71,10 @@ fun DiscoverListScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
-    // observe favourites to render filled hearts
-    val favMap by com.unh.hoppin_android_app.FavoritesStore.items.collectAsState()
-    val favIds = remember(favMap) { favMap.keys }
+    // Observe Firebase favourites
+    val favIds: Set<String> by FavoritesRepositoryFirebase.favoriteIdsFlow().collectAsState(initial = emptySet())
 
-    // transient visual “just-added” for smoothness
+    // Transient visual state to feel instant even if network lags slightly
     var transientAdded by remember { mutableStateOf(setOf<String>()) }
 
     val dynamicTitle = remember(selectedTypes, selectedCategoryId) {
@@ -132,16 +135,12 @@ fun DiscoverListScreen(
     ) { inner ->
         when {
             ui.loading -> Box(
-                Modifier
-                    .fillMaxSize()
-                    .padding(inner),
+                Modifier.fillMaxSize().padding(inner),
                 contentAlignment = Alignment.Center
             ) { CircularProgressIndicator() }
 
             ui.error != null -> Box(
-                Modifier
-                    .fillMaxSize()
-                    .padding(inner),
+                Modifier.fillMaxSize().padding(inner),
                 contentAlignment = Alignment.Center
             ) { Text(ui.error!!, color = MaterialTheme.colorScheme.error) }
 
@@ -155,11 +154,7 @@ fun DiscoverListScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     if (ui.sections.isEmpty()) {
-                        item {
-                            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                                Text("No near by places")
-                            }
-                        }
+                        item { Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Text("No near by places") } }
                     } else {
                         ui.sections.forEach { section ->
                             item(key = "header-${section.type}") {
@@ -185,20 +180,17 @@ fun DiscoverListScreen(
                                         isFavorited = isFav,
                                         onClick = { onPlaceClick(place) },
                                         onToggleFavorite = {
-                                            // add to favourites
-                                            FavoritesStore.add(place)
-
-                                            // transient visual state (in case flow is slow)
+                                            // Tactile feel: quick downscale, then restore
                                             transientAdded = transientAdded + place.id
                                             scope.launch {
-                                                delay(1200)
-                                                transientAdded = transientAdded - place.id
-                                            }
-
-                                            // snackbar feedback
-                                            scope.launch {
+                                                // Write to Firebase (idempotent add)
+                                                runCatching { FavoritesRepositoryFirebase.add(place.id) }
+                                                // Snackbar feedback
                                                 snackbarHostState.currentSnackbarData?.dismiss()
                                                 snackbarHostState.showSnackbar("Added to favourites")
+                                                // Release transient after a moment
+                                                delay(1000)
+                                                transientAdded = transientAdded - place.id
                                             }
                                         }
                                     )
@@ -212,9 +204,7 @@ fun DiscoverListScreen(
     }
 }
 
-/* ------------------------------------------------------------------ */
-/* Data & Loading                                                      */
-/* ------------------------------------------------------------------ */
+/* --------------------------- Data & Loading --------------------------- */
 
 data class UiPlace(
     val id: String,
@@ -223,10 +213,7 @@ data class UiPlace(
     val distanceMeters: Int? = null
 )
 
-data class UiSection(
-    val type: String,
-    val items: List<UiPlace>
-)
+data class UiSection(val type: String, val items: List<UiPlace>)
 
 data class ListUi(
     val loading: Boolean = false,
@@ -307,9 +294,7 @@ private fun searchNearbyOneTypeHydrated(
     }.sortedBy { it.distanceMeters ?: Int.MAX_VALUE }
 }
 
-/* ------------------------------------------------------------------ */
-/* Card UI (image + name + distance + heart + click feedback)         */
-/* ------------------------------------------------------------------ */
+/* --------------------------- Card UI --------------------------- */
 
 @Composable
 private fun PlaceCardMinimal(
@@ -318,7 +303,6 @@ private fun PlaceCardMinimal(
     onClick: () -> Unit,
     onToggleFavorite: () -> Unit
 ) {
-    // tiny “pressed” animation for tactile feedback
     var pressed by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(targetValue = if (pressed) 0.88f else 1f, label = "fav-press")
 
@@ -334,44 +318,25 @@ private fun PlaceCardMinimal(
                 Image(
                     bitmap = place.photo.asImageBitmap(),
                     contentDescription = place.title,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(200.dp),
+                    modifier = Modifier.fillMaxWidth().height(200.dp),
                     contentScale = ContentScale.Crop
                 )
             } else {
                 Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(200.dp)
-                        .background(Color(0xFFEAEAEA)),
+                    modifier = Modifier.fillMaxWidth().height(200.dp).background(Color(0xFFEAEAEA)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFFD8D8D8))
-                    )
+                    Box(modifier = Modifier.size(44.dp).clip(CircleShape).background(Color(0xFFD8D8D8)))
                 }
             }
 
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text(
-                        text = place.title,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    place.distanceMeters?.let {
-                        Text(text = formatDistance(it), style = MaterialTheme.typography.bodySmall)
-                    }
+                    Text(place.title, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    place.distanceMeters?.let { Text(formatDistance(it), style = MaterialTheme.typography.bodySmall) }
                 }
                 IconButton(
                     onClick = {
@@ -389,62 +354,33 @@ private fun PlaceCardMinimal(
         }
     }
 
-    // auto-release the pressed animation
     LaunchedEffect(pressed) {
-        if (pressed) {
-            delay(120)
-            pressed = false
-        }
+        if (pressed) { delay(120); pressed = false }
     }
 }
 
-/* ------------------------------------------------------------------ */
-/* Titles & Utils                                                      */
-/* ------------------------------------------------------------------ */
+/* --------------------------- Titles & Utils --------------------------- */
 
 private fun readableFromType(type: String): String {
     if (type.isBlank()) return "Discover"
     val special = mapOf(
-        "night_club" to "Night Club",
-        "bowling_alley" to "Bowling Alley",
-        "shopping_mall" to "Shopping Mall",
-        "art_gallery" to "Art Gallery",
-        "movie_theater" to "Movie Theater",
-        "gas_station" to "Gas Station",
-        "car_repair" to "Car Repair",
-        "tourist_attraction" to "Tourist Attraction"
+        "night_club" to "Night Club", "bowling_alley" to "Bowling Alley", "shopping_mall" to "Shopping Mall",
+        "art_gallery" to "Art Gallery", "movie_theater" to "Movie Theater", "gas_station" to "Gas Station",
+        "car_repair" to "Car Repair", "tourist_attraction" to "Tourist Attraction"
     )
-    special[type]?.let { return it }
-    return type
-        .trim()
-        .split('_')
-        .filter { it.isNotBlank() }
-        .joinToString(" ") { it.replaceFirstChar { c -> c.titlecase() } }
+    return special[type] ?: type.split('_').filter { it.isNotBlank() }.joinToString(" ") { it.replaceFirstChar { c -> c.titlecase() } }
 }
 
 private fun categoryTitle(categoryId: Int): String = when (categoryId) {
-    1 -> "Attractions"
-    2 -> "Food & Drink"
-    3 -> "Entertainment"
-    4 -> "Shopping"
-    5 -> "Stay & Relax"
-    6 -> "Wellness & Services"
-    7 -> "Emergency"
-    8 -> "Essentials"
-    else -> "Discover"
+    1 -> "Attractions"; 2 -> "Food & Drink"; 3 -> "Entertainment"; 4 -> "Shopping"
+    5 -> "Stay & Relax"; 6 -> "Wellness & Services"; 7 -> "Emergency"; 8 -> "Essentials"; else -> "Discover"
 }
 
-private fun distanceMeters(
-    lat1: Double, lon1: Double, lat2: Double, lon2: Double
-): Double {
+private fun distanceMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
     val R = 6371000.0
-    val dLat = Math.toRadians(lat2 - lat1)
-    val dLon = Math.toRadians(lon2 - lon1)
-    val a = sin(dLat / 2).pow(2.0) +
-            cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) *
-            sin(dLon / 2).pow(2.0)
-    return R * 2 * atan2(kotlin.math.sqrt(a), kotlin.math.sqrt(1 - a))
+    val dLat = Math.toRadians(lat2 - lat1); val dLon = Math.toRadians(lon2 - lon1)
+    val a = sin(dLat/2)*sin(dLat/2) + cos(Math.toRadians(lat1))*cos(Math.toRadians(lat2))*sin(dLon/2)*sin(dLon/2)
+    return R * 2 * atan2(sqrt(a), sqrt(1-a))
 }
 
-private fun formatDistance(m: Int): String =
-    if (m >= 1000) String.format("%.1f km away", m / 1000.0) else "$m m away"
+private fun formatDistance(m: Int): String = if (m >= 1000) String.format("%.1f km away", m / 1000.0) else "$m m away"
