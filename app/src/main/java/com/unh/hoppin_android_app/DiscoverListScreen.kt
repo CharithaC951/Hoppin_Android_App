@@ -33,6 +33,10 @@ import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.tasks.Tasks
 import com.google.android.libraries.places.api.Places
 import com.google.android.libraries.places.api.model.CircularBounds
+import com.google.android.libraries.places.api.model.DayOfWeek
+import com.google.android.libraries.places.api.model.LocalTime
+import com.google.android.libraries.places.api.model.OpeningHours
+import com.google.android.libraries.places.api.model.Period
 import com.google.android.libraries.places.api.model.PhotoMetadata
 import com.google.android.libraries.places.api.model.Place
 import com.google.android.libraries.places.api.net.FetchPhotoRequest
@@ -44,11 +48,27 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlin.math.roundToInt
+import java.util.Calendar
 import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
+
+/* ------------------------------------------------------------------ */
+/* Filters                                                            */
+/* ------------------------------------------------------------------ */
+
+enum class SortOption { NEAREST, FARTHEST }
+
+data class DiscoverFilters(
+    val sort: SortOption = SortOption.NEAREST,
+    val maxDistanceMeters: Int? = null,   // 500 or 1000 (null = any)
+    val openNow: Boolean = false,         // client-side
+    val minRating: Float? = 4.0f,         // client-side
+    val onlyWithPhoto: Boolean = false,
+    val onlyFavorites: Boolean = false
+)
 
 /* ------------------------------------------------------------------ */
 /* Screen                                                             */
@@ -71,11 +91,19 @@ fun DiscoverListScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
-    // Observe Firebase favourites
     val favIds: Set<String> by FavoritesRepositoryFirebase.favoriteIdsFlow().collectAsState(initial = emptySet())
-
-    // Transient visual state to feel instant even if network lags slightly
     var transientAdded by remember { mutableStateOf(setOf<String>()) }
+
+    var filters by remember {
+        mutableStateOf(
+            DiscoverFilters(
+                sort = SortOption.NEAREST,
+                maxDistanceMeters = null,
+                openNow = false,
+                minRating = 4.0f
+            )
+        )
+    }
 
     val dynamicTitle = remember(selectedTypes, selectedCategoryId) {
         when {
@@ -94,14 +122,14 @@ fun DiscoverListScreen(
         }
     }
 
-    val safeCenter = center ?: LatLng(41.3100, -72.9300) // New Haven fallback
+    val safeCenter = center ?: LatLng(41.3100, -72.9300) // fallback (New Haven)
     var ui by remember { mutableStateOf(ListUi(loading = true)) }
 
     LaunchedEffect(activeTypes, safeCenter, radiusMeters, maxResults, placesClient, context) {
         ui = ui.copy(loading = true, error = null)
         val client = placesClient ?: Places.createClient(context)
         val result = runCatching {
-            loadNearbySectionsWithPhotosAndDistance(
+            loadNearbySectionsWithPhotosDistanceRatingOpenNow(
                 client = client,
                 center = safeCenter,
                 typesOrdered = activeTypes,
@@ -145,55 +173,69 @@ fun DiscoverListScreen(
             ) { Text(ui.error!!, color = MaterialTheme.colorScheme.error) }
 
             else -> {
-                LazyColumn(
+                Column(
                     modifier = modifier
                         .fillMaxSize()
                         .padding(inner)
-                        .padding(horizontal = 16.dp),
-                    contentPadding = PaddingValues(vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                        .padding(horizontal = 16.dp)
                 ) {
-                    if (ui.sections.isEmpty()) {
-                        item { Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Text("No near by places") } }
-                    } else {
-                        ui.sections.forEach { section ->
-                            item(key = "header-${section.type}") {
-                                Text(
-                                    text = readableFromType(section.type),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.SemiBold
-                                )
+                    // Filter bar
+                    FilterBar(
+                        filters = filters,
+                        onChange = { filters = it }
+                    )
+
+                    Spacer(Modifier.height(12.dp))
+
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        if (ui.sections.isEmpty()) {
+                            item {
+                                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                    Text("No near by places")
+                                }
                             }
-                            if (section.items.isEmpty()) {
-                                item(key = "empty-${section.type}") {
+                        } else {
+                            ui.sections.forEach { rawSection ->
+                                val section = applyFiltersToSection(rawSection, favIds, filters)
+
+                                item(key = "header-${section.type}") {
                                     Text(
-                                        text = "No near by ${readableFromType(section.type)}",
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        text = readableFromType(section.type),
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.SemiBold
                                     )
                                 }
-                            } else {
-                                items(section.items, key = { it.id }) { place ->
-                                    val isFav = favIds.contains(place.id) || transientAdded.contains(place.id)
+                                if (section.items.isEmpty()) {
+                                    item(key = "empty-${section.type}") {
+                                        Text(
+                                            text = "No near by ${readableFromType(section.type)}",
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                } else {
+                                    items(section.items, key = { it.id }) { place ->
+                                        val isFav = favIds.contains(place.id) || transientAdded.contains(place.id)
 
-                                    PlaceCardMinimal(
-                                        place = place,
-                                        isFavorited = isFav,
-                                        onClick = { onPlaceClick(place) },
-                                        onToggleFavorite = {
-                                            // Tactile feel: quick downscale, then restore
-                                            transientAdded = transientAdded + place.id
-                                            scope.launch {
-                                                // Write to Firebase (idempotent add)
-                                                runCatching { FavoritesRepositoryFirebase.add(place.id) }
-                                                // Snackbar feedback
-                                                snackbarHostState.currentSnackbarData?.dismiss()
-                                                snackbarHostState.showSnackbar("Added to favourites")
-                                                // Release transient after a moment
-                                                delay(1000)
-                                                transientAdded = transientAdded - place.id
+                                        PlaceCardMinimal(
+                                            place = place,
+                                            isFavorited = isFav,
+                                            onClick = { onPlaceClick(place) },
+                                            onToggleFavorite = {
+                                                transientAdded = transientAdded + place.id
+                                                scope.launch {
+                                                    runCatching { FavoritesRepositoryFirebase.add(place.id) }
+                                                    snackbarHostState.currentSnackbarData?.dismiss()
+                                                    snackbarHostState.showSnackbar("Added to favourites")
+                                                    kotlinx.coroutines.delay(1000)
+                                                    transientAdded = transientAdded - place.id
+                                                }
                                             }
-                                        }
-                                    )
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -204,13 +246,94 @@ fun DiscoverListScreen(
     }
 }
 
+/* --------------------------- Filter UI --------------------------- */
+
+@Composable
+private fun FilterBar(
+    filters: DiscoverFilters,
+    onChange: (DiscoverFilters) -> Unit
+) {
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // Distance: Any / ≤500m / ≤1km
+            DistanceChip(
+                label = "Any",
+                selected = filters.maxDistanceMeters == null,
+                onClick = { onChange(filters.copy(maxDistanceMeters = null)) }
+            )
+            DistanceChip(
+                label = "≤500 m",
+                selected = filters.maxDistanceMeters == 500,
+                onClick = { onChange(filters.copy(maxDistanceMeters = 500)) }
+            )
+            DistanceChip(
+                label = "≤1 km",
+                selected = filters.maxDistanceMeters == 1000,
+                onClick = { onChange(filters.copy(maxDistanceMeters = 1000)) }
+            )
+
+            Spacer(Modifier.weight(1f))
+
+            // Sort toggle (Nearest/Farthest)
+            FilterChip(
+                selected = filters.sort == SortOption.NEAREST,
+                onClick = {
+                    onChange(
+                        filters.copy(
+                            sort = if (filters.sort == SortOption.NEAREST) SortOption.FARTHEST else SortOption.NEAREST
+                        )
+                    )
+                },
+                label = { Text(if (filters.sort == SortOption.NEAREST) "Nearest" else "Farthest") }
+            )
+        }
+
+        Spacer(Modifier.height(8.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // Open now
+            FilterChip(
+                selected = filters.openNow,
+                onClick = { onChange(filters.copy(openNow = !filters.openNow)) },
+                label = { Text("Open now") }
+            )
+
+            // Rating ≥ 4.0
+            FilterChip(
+                selected = (filters.minRating ?: 0f) >= 4.0f,
+                onClick = {
+                    onChange(filters.copy(minRating = if ((filters.minRating ?: 0f) >= 4.0f) null else 4.0f))
+                },
+                label = { Text("4.0+") }
+            )
+        }
+    }
+}
+
+@Composable
+private fun DistanceChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = { Text(label) }
+    )
+}
+
 /* --------------------------- Data & Loading --------------------------- */
 
 data class UiPlace(
     val id: String,
     val title: String,
     val photo: Bitmap?,
-    val distanceMeters: Int? = null
+    val distanceMeters: Int? = null,
+    val rating: Float? = null,
+    val isOpenNow: Boolean? = null
 )
 
 data class UiSection(val type: String, val items: List<UiPlace>)
@@ -232,7 +355,7 @@ val CategoryToTypes: Map<Int, List<String>> = mapOf(
     8 to listOf("post_office", "bank", "atm", "gas_station", "car_repair")
 )
 
-private suspend fun loadNearbySectionsWithPhotosAndDistance(
+private suspend fun loadNearbySectionsWithPhotosDistanceRatingOpenNow(
     client: PlacesClient,
     center: LatLng,
     typesOrdered: List<String>,
@@ -244,7 +367,10 @@ private suspend fun loadNearbySectionsWithPhotosAndDistance(
         return@withContext listOf(UiSection(type = "places", items = generic))
     }
     typesOrdered.map { t ->
-        UiSection(type = t, items = searchNearbyOneTypeHydrated(client, center, t, radiusMeters, maxResults))
+        UiSection(
+            type = t,
+            items = searchNearbyOneTypeHydrated(client, center, t, radiusMeters, maxResults)
+        )
     }
 }
 
@@ -272,7 +398,14 @@ private fun searchNearbyOneTypeHydrated(
         val fetched = runCatching {
             val req = FetchPlaceRequest.builder(
                 placeId,
-                listOf(Place.Field.ID, Place.Field.NAME, Place.Field.PHOTO_METADATAS, Place.Field.LAT_LNG)
+                listOf(
+                    Place.Field.ID,
+                    Place.Field.NAME,
+                    Place.Field.PHOTO_METADATAS,
+                    Place.Field.LAT_LNG,
+                    Place.Field.RATING,
+                    Place.Field.OPENING_HOURS
+                )
             ).build()
             Tasks.await(client.fetchPlace(req)).place
         }.getOrNull() ?: return@mapNotNull null
@@ -289,9 +422,39 @@ private fun searchNearbyOneTypeHydrated(
         val d = fetched.latLng?.let { ll ->
             distanceMeters(center.latitude, center.longitude, ll.latitude, ll.longitude).roundToInt()
         }
+        val rating = fetched.rating?.toFloat()
+        val isOpen = computeIsOpenNow(fetched.openingHours)
 
-        UiPlace(id = placeId, title = title, photo = bmp, distanceMeters = d)
-    }.sortedBy { it.distanceMeters ?: Int.MAX_VALUE }
+        UiPlace(id = placeId, title = title, photo = bmp, distanceMeters = d, rating = rating, isOpenNow = isOpen)
+    }
+}
+
+/* --------------------------- Apply filters to section --------------------------- */
+
+private fun applyFiltersToSection(
+    section: UiSection,
+    favIds: Set<String>,
+    f: DiscoverFilters
+): UiSection {
+    var items = section.items
+
+    f.maxDistanceMeters?.let { max ->
+        items = items.filter { (it.distanceMeters ?: Int.MAX_VALUE) <= max }
+    }
+    if (f.openNow) {
+        items = items.filter { it.isOpenNow == true }
+    }
+    f.minRating?.let { min ->
+        items = items.filter { (it.rating ?: 0f) >= min }
+    }
+    if (f.onlyWithPhoto) items = items.filter { it.photo != null }
+    if (f.onlyFavorites) items = items.filter { favIds.contains(it.id) }
+
+    items = when (f.sort) {
+        SortOption.NEAREST -> items.sortedBy { it.distanceMeters ?: Int.MAX_VALUE }
+        SortOption.FARTHEST -> items.sortedByDescending { it.distanceMeters ?: Int.MIN_VALUE }
+    }
+    return section.copy(items = items)
 }
 
 /* --------------------------- Card UI --------------------------- */
@@ -355,7 +518,7 @@ private fun PlaceCardMinimal(
     }
 
     LaunchedEffect(pressed) {
-        if (pressed) { delay(120); pressed = false }
+        if (pressed) { kotlinx.coroutines.delay(120); pressed = false }
     }
 }
 
@@ -383,4 +546,65 @@ private fun distanceMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Doubl
     return R * 2 * atan2(sqrt(a), sqrt(1-a))
 }
 
-private fun formatDistance(m: Int): String = if (m >= 1000) String.format("%.1f km away", m / 1000.0) else "$m m away"
+private fun formatDistance(m: Int): String =
+    if (m >= 1000) String.format("%.1f km away", m / 1000.0) else "$m m away"
+
+/* --------------------------- Open-now computation (SDK: DayOfWeek/LocalTime) --------------------------- */
+
+private fun computeIsOpenNow(hours: OpeningHours?): Boolean? {
+    val periods: List<Period> = hours?.periods ?: return null
+
+    val cal = Calendar.getInstance()
+    val currentIdx = calendarDayToIdx(cal.get(Calendar.DAY_OF_WEEK)) // 0..6 (Mon=0..Sun=6)
+    val nowMinutes = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
+
+    for (p in periods) {
+        val open = p.open ?: continue
+        val close = p.close ?: continue
+
+        val oDayIdx = open.day?.let { dayOfWeekToIdx(it) } ?: continue
+        val cDayIdx = close.day?.let { dayOfWeekToIdx(it) } ?: oDayIdx
+
+        val oMin = localTimeToMinutes(open.time) ?: continue
+        val cMin = localTimeToMinutes(close.time) ?: continue
+
+        if (oDayIdx == cDayIdx) {
+            // Same-day window (e.g., 09:00–18:00)
+            if (currentIdx == oDayIdx && nowMinutes in oMin until cMin) return true
+        } else if ((oDayIdx + 1) % 7 == cDayIdx) {
+            // Overnight window (e.g., Fri 18:00 – Sat 02:00)
+            if (currentIdx == oDayIdx && nowMinutes >= oMin) return true
+            if (currentIdx == cDayIdx && nowMinutes < cMin) return true
+        } else {
+            // Multi-day span (rare; approximate at edges)
+            if (currentIdx == oDayIdx && nowMinutes >= oMin) return true
+            if (currentIdx == cDayIdx && nowMinutes < cMin) return true
+        }
+    }
+    return false
+}
+
+private fun localTimeToMinutes(t: LocalTime?): Int? =
+    t?.let { it.hours * 60 + it.minutes }
+
+private fun dayOfWeekToIdx(d: DayOfWeek): Int = when (d) {
+    DayOfWeek.MONDAY -> 0
+    DayOfWeek.TUESDAY -> 1
+    DayOfWeek.WEDNESDAY -> 2
+    DayOfWeek.THURSDAY -> 3
+    DayOfWeek.FRIDAY -> 4
+    DayOfWeek.SATURDAY -> 5
+    DayOfWeek.SUNDAY -> 6
+    else -> 0
+}
+
+private fun calendarDayToIdx(dayOfWeek: Int): Int = when (dayOfWeek) {
+    Calendar.MONDAY -> 0
+    Calendar.TUESDAY -> 1
+    Calendar.WEDNESDAY -> 2
+    Calendar.THURSDAY -> 3
+    Calendar.FRIDAY -> 4
+    Calendar.SATURDAY -> 5
+    Calendar.SUNDAY -> 6
+    else -> 0
+}

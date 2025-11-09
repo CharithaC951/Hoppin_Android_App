@@ -1,15 +1,20 @@
 package com.unh.hoppin_android_app
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.core.app.ActivityCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavType
@@ -18,6 +23,10 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
+import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.tasks.CancellationTokenSource
 import com.google.android.libraries.places.api.Places
 import com.unh.hoppin_android_app.ui.theme.Hoppin_Android_AppTheme
 import kotlinx.coroutines.launch
@@ -34,7 +43,6 @@ class MainActivity : ComponentActivity() {
         val splash = installSplashScreen()
         super.onCreate(savedInstanceState)
         if (!Places.isInitialized()) {
-            // You can also use applicationContext here if you prefer
             Places.initialize(this, PLACES_API_KEY)
         }
         var keepOn = true
@@ -53,8 +61,66 @@ class MainActivity : ComponentActivity() {
                     val navController = rememberNavController()
                     val currentBackStackEntry by navController.currentBackStackEntryAsState()
                     val currentRoute = currentBackStackEntry?.destination?.route
-
                     val showBottomBar = currentRoute != "login"
+
+                    // ---- Location plumbing to pass to DiscoverListScreen ----
+                    val context = this@MainActivity
+                    val fused = remember { LocationServices.getFusedLocationProviderClient(context) }
+                    var deviceCenter by remember { mutableStateOf<LatLng?>(null) }
+
+                    val permissionLauncher = rememberLauncherForActivityResult(
+                        contract = ActivityResultContracts.RequestMultiplePermissions()
+                    ) { granted ->
+                        val allowed = granted[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+                                granted[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+                        if (allowed) {
+                            val token = CancellationTokenSource()
+                            fused.getCurrentLocation(
+                                Priority.PRIORITY_BALANCED_POWER_ACCURACY,
+                                token.token
+                            ).addOnSuccessListener { loc ->
+                                if (loc != null) {
+                                    deviceCenter = LatLng(loc.latitude, loc.longitude)
+                                } else {
+                                    fused.lastLocation.addOnSuccessListener { last ->
+                                        if (last != null) {
+                                            deviceCenter = LatLng(last.latitude, last.longitude)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    LaunchedEffect(Unit) {
+                        val fine = ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
+                        val coarse = ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION)
+                        val granted = fine == PackageManager.PERMISSION_GRANTED || coarse == PackageManager.PERMISSION_GRANTED
+                        if (granted) {
+                            val token = CancellationTokenSource()
+                            fused.getCurrentLocation(
+                                Priority.PRIORITY_BALANCED_POWER_ACCURACY,
+                                token.token
+                            ).addOnSuccessListener { loc ->
+                                if (loc != null) {
+                                    deviceCenter = LatLng(loc.latitude, loc.longitude)
+                                } else {
+                                    fused.lastLocation.addOnSuccessListener { last ->
+                                        if (last != null) {
+                                            deviceCenter = LatLng(last.latitude, last.longitude)
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            permissionLauncher.launch(arrayOf(
+                                Manifest.permission.ACCESS_FINE_LOCATION,
+                                Manifest.permission.ACCESS_COARSE_LOCATION
+                            ))
+                        }
+                    }
+                    // ---------------------------------------------------------
+
                     if (showBottomBar) {
                         Scaffold(
                             bottomBar = {
@@ -110,9 +176,6 @@ class MainActivity : ComponentActivity() {
                                     val catId = backStackEntry.arguments!!.getInt("catId")
                                     SubCategoriesScreen(navController = navController, catId = catId)
                                 }
-                                composable("settings") {
-                                    SettingsScreen(navController = navController)
-                                }
                                 composable(
                                     route = "discover?type={type}&categoryId={categoryId}",
                                     arguments = listOf(
@@ -125,6 +188,7 @@ class MainActivity : ComponentActivity() {
                                     DiscoverListScreen(
                                         selectedTypes = typeArg.split(',').filter { it.isNotBlank() },
                                         selectedCategoryId = categoryId.takeIf { it != -1 },
+                                        center = deviceCenter, // ✅ pass device location when available
                                         onBack = { navController.popBackStack() },
                                         onPlaceClick = { uiPlace ->
                                             navController.navigate("place/${uiPlace.id}")
@@ -142,9 +206,9 @@ class MainActivity : ComponentActivity() {
                                         onBack = { navController.popBackStack() }
                                     )
                                 }
-
+                                // Favourites page
                                 composable("favorites") {
-                                    com.unh.hoppin_android_app.FavoritesScreen(
+                                    FavoritesScreen(
                                         onBack = { navController.popBackStack() },
                                         onPlaceClick = { uiPlace ->
                                             navController.navigate("place/${uiPlace.id}")
@@ -181,9 +245,6 @@ class MainActivity : ComponentActivity() {
                                     navController = navController
                                 )
                             }
-                            composable("settings") {
-                                SettingsScreen(navController = navController)
-                            }
                             composable("gamification") {
                                 GamificationScreen(navController = navController)
                             }
@@ -209,6 +270,7 @@ class MainActivity : ComponentActivity() {
                                 DiscoverListScreen(
                                     selectedTypes = typeArg.split(',').filter { it.isNotBlank() },
                                     selectedCategoryId = categoryId.takeIf { it != -1 },
+                                    center = deviceCenter, // ✅ pass device location here as well
                                     onBack = { navController.popBackStack() },
                                     onPlaceClick = { uiPlace ->
                                         navController.navigate("place/${uiPlace.id}")
@@ -226,9 +288,9 @@ class MainActivity : ComponentActivity() {
                                     onBack = { navController.popBackStack() }
                                 )
                             }
-
+                            // Favourites page
                             composable("favorites") {
-                                com.unh.hoppin_android_app.FavoritesScreen(
+                                FavoritesScreen(
                                     onBack = { navController.popBackStack() },
                                     onPlaceClick = { uiPlace ->
                                         navController.navigate("place/${uiPlace.id}")
