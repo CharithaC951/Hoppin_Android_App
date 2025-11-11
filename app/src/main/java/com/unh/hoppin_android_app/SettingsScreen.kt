@@ -1,5 +1,9 @@
 package com.unh.hoppin_android_app
 
+import android.Manifest
+import android.annotation.SuppressLint
+import android.content.Context
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -18,18 +22,81 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.isGranted
+import com.google.accompanist.permissions.rememberPermissionState
 import com.unh.hoppin_android_app.ui.theme.Hoppin_Android_AppTheme
+import com.unh.hoppin_android_app.viewmodels.SettingsViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
+@SuppressLint("MissingPermission")
+private fun showPasswordUpdateNotification(context: Context) {
+    val notificationIcon = R.drawable.ic_launcher_foreground
+
+    val builder = NotificationCompat.Builder(context, "HOPPIN_CHANNEL_ID")
+        .setSmallIcon(notificationIcon)
+        .setContentTitle("Hoppin Account Security")
+        .setContentText("Your password has been updated successfully.")
+        .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+        .setAutoCancel(true)
+
+    with(NotificationManagerCompat.from(context)) {
+        notify(1, builder.build())
+    }
+}
+
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
 @Composable
-fun SettingsScreen(navController: NavController) {
+fun SettingsScreen(
+    navController: NavController,
+    settingsViewModel: SettingsViewModel = viewModel()
+) {
+    val uiState by settingsViewModel.uiState.collectAsState()
+    val context = LocalContext.current
+
+    val notificationPermissionState = rememberPermissionState(
+        permission = Manifest.permission.POST_NOTIFICATIONS
+    )
+
+    LaunchedEffect(uiState.logoutSuccessful, uiState.successMessage, uiState.errorMessage, uiState.showPasswordUpdateNotification) {
+        if (uiState.logoutSuccessful) {
+            navController.navigate("login") {
+                popUpTo(0)
+            }
+        }
+        uiState.successMessage?.let {
+            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+            settingsViewModel.clearMessages()
+        }
+        uiState.errorMessage?.let {
+            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+            settingsViewModel.clearMessages()
+        }
+
+        if (uiState.showPasswordUpdateNotification) {
+
+            if (uiState.notificationsEnabled) {
+                if (notificationPermissionState.status.isGranted) {
+                    showPasswordUpdateNotification(context)
+                } else {
+                    notificationPermissionState.launchPermissionRequest()
+                }
+            }
+            settingsViewModel.passwordNotificationShown()
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -55,14 +122,24 @@ fun SettingsScreen(navController: NavController) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            ChangePasswordSection()
-            NotificationSettingsSection()
+            ChangePasswordSection(
+                isLoading = uiState.isLoading,
+                onUpdatePassword = { current, new ->
+                    settingsViewModel.changePassword(current, new)
+                }
+            )
+            NotificationSettingsSection(
+                isEnabled = uiState.notificationsEnabled,
+                onToggle = { isEnabled ->
+                    settingsViewModel.setNotificationPreference(isEnabled)
+                }
+            )
             ContactUsSection()
 
             Spacer(modifier = Modifier.weight(1f))
 
             Button(
-                onClick = { /* Handle log out */ },
+                onClick = { settingsViewModel.logOut() },
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
                 modifier = Modifier
@@ -76,7 +153,10 @@ fun SettingsScreen(navController: NavController) {
 }
 
 @Composable
-fun ChangePasswordSection() {
+fun ChangePasswordSection(
+    isLoading: Boolean,
+    onUpdatePassword: (current: String, new: String) -> Unit
+) {
     var expanded by remember { mutableStateOf(false) }
     var currentPassword by remember { mutableStateOf("") }
     var newPassword by remember { mutableStateOf("") }
@@ -126,14 +206,19 @@ fun ChangePasswordSection() {
                     visualTransformation = PasswordVisualTransformation()
                 )
                 Button(
-                    onClick = { /* Handle update password */ },
+                    onClick = { onUpdatePassword(currentPassword, newPassword) },
+                    enabled = !isLoading,
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(50.dp)
                 ) {
-                    Text("Update password", color = Color.White)
+                    if (isLoading) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
+                    } else {
+                        Text("Update password", color = Color.White)
+                    }
                 }
             }
         }
@@ -141,9 +226,10 @@ fun ChangePasswordSection() {
 }
 
 @Composable
-fun NotificationSettingsSection() {
-    var isChecked by remember { mutableStateOf(true) }
-
+fun NotificationSettingsSection(
+    isEnabled: Boolean,
+    onToggle: (Boolean) -> Unit
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -154,8 +240,8 @@ fun NotificationSettingsSection() {
     ) {
         Text("Enable/Disable Notifications", fontWeight = FontWeight.Bold, fontSize = 16.sp)
         Switch(
-            checked = isChecked,
-            onCheckedChange = { isChecked = it }
+            checked = isEnabled,
+            onCheckedChange = onToggle
         )
     }
 }
