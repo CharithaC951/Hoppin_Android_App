@@ -1,13 +1,21 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
+@file:Suppress("DEPRECATION")
 
 package com.unh.hoppin_android_app
 
+import android.Manifest
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
@@ -27,12 +35,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat.startActivity
+import coil.compose.AsyncImage
 import com.google.android.gms.tasks.Tasks
 import com.google.android.libraries.places.api.Places
 import com.google.android.libraries.places.api.model.PhotoMetadata
@@ -49,6 +59,8 @@ import com.google.firebase.firestore.ktx.firestore
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import com.google.firebase.auth.ktx.auth
+
+/* ------------------------ Editorial helpers ------------------------ */
 
 private fun extractEditorialSummary(place: Place): String? {
     val s = place.editorialSummary ?: return null
@@ -103,6 +115,8 @@ private fun buildFallbackDescription(
         .joinToString(" — ")
 }
 
+/* ------------------------ Firestore: Review model ------------------------ */
+
 data class Review(
     val id: String = "",
     val author: String = "Anonymous",
@@ -111,12 +125,12 @@ data class Review(
     val createdAt: Timestamp = Timestamp.now()
 )
 
-/* ------------------------ Screen ------------------------ */
 
 @Composable
 fun PlaceDetailsScreen(
     placeId: String,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onOpenTripCard: () -> Unit
 ) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -264,14 +278,13 @@ fun PlaceDetailsScreen(
         )
 
     fun postReview() {
-        scope.launch {
+        val ctxScope = scope
+        ctxScope.launch {
             mySubmitting = true
             runCatching {
                 // Ensure we have an auth user (anonymous ok)
                 val auth = Firebase.auth
-                if (auth.currentUser == null) {
-                    auth.signInAnonymously().await()
-                }
+                if (auth.currentUser == null) auth.signInAnonymously().await()
                 val uid = Firebase.auth.currentUser!!.uid
 
                 val author = yourName.ifBlank { "Anonymous" }
@@ -279,11 +292,11 @@ fun PlaceDetailsScreen(
                 val text = myReviewText.trim()
 
                 val data = mapOf(
-                    "userId" to uid,                           // 🔑 REQUIRED BY YOUR RULES
+                    "userId" to uid,                           // REQUIRED BY YOUR RULES
                     "author" to author,
                     "rating" to ratingSafe,
                     "text" to text,
-                    "createdAt" to FieldValue.serverTimestamp() // server time (rules accept 'timestamp')
+                    "createdAt" to FieldValue.serverTimestamp()
                 )
 
                 Firebase.firestore.collection("places")
@@ -389,7 +402,7 @@ fun PlaceDetailsScreen(
 
                     Spacer(Modifier.height(16.dp))
 
-                    // Title + rating
+                    // Title + rating + address
                     Column(Modifier.padding(horizontal = 16.dp)) {
                         Text(name.orEmpty(), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                         Spacer(Modifier.height(6.dp))
@@ -407,61 +420,121 @@ fun PlaceDetailsScreen(
 
                     Spacer(Modifier.height(16.dp))
 
-                    // Favorite + Share
-                    Row(
-                        modifier = Modifier
-                            .padding(top = 12.dp)
-                            .fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
+                    /* ---------------- Uniform actions in a LazyRow ---------------- */
+                    val shape = RoundedCornerShape(14.dp)
+
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        // Favorite
-                        FilledTonalButton(
-                            onClick = {
-                                if (isFav) {
-                                    FavoritesStore.remove(placeId)
-                                    isFav = false
-                                } else {
-                                    FavoritesStore.add(buildUiPlaceForFavorites())
-                                    isFav = true
-                                }
-                            },
-                            shape = RoundedCornerShape(14.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (isFav) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                                contentDescription = if (isFav) "Remove from favorites" else "Add to favorites"
-                            )
-                            Spacer(Modifier.width(6.dp))
-                            Text(if (isFav) "Favorited" else "Favorite")
+                        // Favorite (toggle)
+                        item {
+                            FilledTonalButton(
+                                onClick = {
+                                    if (isFav) {
+                                        FavoritesStore.remove(placeId)
+                                        isFav = false
+                                    } else {
+                                        FavoritesStore.add(buildUiPlaceForFavorites())
+                                        isFav = true
+                                    }
+                                },
+                                shape = shape
+                            ) {
+                                Icon(
+                                    imageVector = if (isFav) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                                    contentDescription = if (isFav) "Remove from favorites" else "Add to favorites"
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(if (isFav) "Favorited" else "Favorite")
+                            }
                         }
 
-                        Spacer(Modifier.width(8.dp))
-
                         // Share
-                        OutlinedButton(
-                            onClick = {
-                                val ll = latLng
-                                val gmaps = if (ll != null) {
-                                    "https://www.google.com/maps/search/?api=1&query=${ll.latitude},${ll.longitude}&query_place_id=$placeId"
-                                } else {
-                                    "https://www.google.com/maps/search/?api=1&query=${Uri.encode(name ?: address ?: "")}"
-                                }
-                                val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                                    type = "text/plain"
-                                    putExtra(Intent.EXTRA_SUBJECT, name ?: "Place")
-                                    putExtra(Intent.EXTRA_TEXT, "${name ?: ""}\n$gmaps")
-                                }
-                                startActivity(ctx, Intent.createChooser(shareIntent, "Share place"), null)
-                            },
-                            shape = RoundedCornerShape(14.dp)
-                        ) {
-                            Icon(Icons.Filled.Share, contentDescription = "Share")
-                            Spacer(Modifier.width(6.dp))
-                            Text("Share")
+                        item {
+                            FilledTonalButton(
+                                onClick = {
+                                    val ll = latLng
+                                    val gmaps = if (ll != null) {
+                                        "https://www.google.com/maps/search/?api=1&query=${ll.latitude},${ll.longitude}&query_place_id=$placeId"
+                                    } else {
+                                        "https://www.google.com/maps/search/?api=1&query=${Uri.encode(name ?: address ?: "")}"
+                                    }
+                                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                        type = "text/plain"
+                                        putExtra(Intent.EXTRA_SUBJECT, name ?: "Place")
+                                        putExtra(Intent.EXTRA_TEXT, "${name ?: ""}\n$gmaps")
+                                    }
+                                    startActivity(ctx, Intent.createChooser(shareIntent, "Share place"), null)
+                                },
+                                shape = shape
+                            ) {
+                                Icon(Icons.Filled.Share, contentDescription = "Share")
+                                Spacer(Modifier.width(6.dp))
+                                Text("Share")
+                            }
+                        }
+
+                        // Call
+                        item {
+                            FilledTonalButton(
+                                onClick = {
+                                    phone?.let { tel ->
+                                        val intent = Intent(Intent.ACTION_DIAL).apply { data = Uri.parse("tel:$tel") }
+                                        startActivity(ctx, intent, null)
+                                    }
+                                },
+                                enabled = phone != null,
+                                shape = shape
+                            ) {
+                                Icon(Icons.Filled.Phone, contentDescription = "Call")
+                                Spacer(Modifier.width(6.dp))
+                                Text("Call")
+                            }
+                        }
+
+                        // Website
+                        item {
+                            FilledTonalButton(
+                                onClick = {
+                                    website?.let { uri ->
+                                        val intent = Intent(Intent.ACTION_VIEW, uri)
+                                        startActivity(ctx, intent, null)
+                                    }
+                                },
+                                enabled = website != null,
+                                shape = shape
+                            ) {
+                                Icon(Icons.Filled.Language, contentDescription = "Website")
+                                Spacer(Modifier.width(6.dp))
+                                Text("Website")
+                            }
+                        }
+
+                        // Directions
+                        item {
+                            FilledTonalButton(
+                                onClick = {
+                                    latLng?.let { ll ->
+                                        val gmm = Uri.parse("geo:${ll.latitude},${ll.longitude}?q=${Uri.encode(name ?: "")}")
+                                        val intent = Intent(Intent.ACTION_VIEW, gmm)
+                                        startActivity(ctx, intent, null)
+                                    }
+                                },
+                                enabled = latLng != null,
+                                shape = shape
+                            ) {
+                                Icon(Icons.Filled.Directions, contentDescription = "Directions")
+                                Spacer(Modifier.width(6.dp))
+                                Text("Directions")
+                            }
                         }
                     }
 
-                    // About
+                    Spacer(Modifier.height(16.dp))
+
+                    /* ----------------------------- About ----------------------------- */
                     Column(Modifier.padding(horizontal = 16.dp)) {
                         Text("About", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                         Spacer(Modifier.height(8.dp))
@@ -472,49 +545,26 @@ fun PlaceDetailsScreen(
                         )
                     }
 
-                    // Quick actions
-                    Row(
-                        modifier = Modifier
-                            .padding(horizontal = 16.dp, vertical = 16.dp)
-                            .fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        val shape = RoundedCornerShape(16.dp)
-
-                        OutlinedButton(
-                            onClick = {
-                                phone?.let { tel ->
-                                    val intent = Intent(Intent.ACTION_DIAL).apply { data = Uri.parse("tel:$tel") }
-                                    startActivity(ctx, intent, null)
-                                }
-                            },
-                            shape = shape
-                        ) { Icon(Icons.Filled.Phone, null); Spacer(Modifier.width(6.dp)); Text("Call") }
-
-                        OutlinedButton(
-                            onClick = {
-                                website?.let { uri ->
-                                    val intent = Intent(Intent.ACTION_VIEW, uri)
-                                    startActivity(ctx, intent, null)
-                                }
-                            },
-                            shape = shape
-                        ) { Icon(Icons.Filled.Language, null); Spacer(Modifier.width(6.dp)); Text("Website") }
-
-                        OutlinedButton(
-                            onClick = {
-                                latLng?.let { ll ->
-                                    val gmm = Uri.parse("geo:${ll.latitude},${ll.longitude}?q=${Uri.encode(name ?: "")}")
-                                    val intent = Intent(Intent.ACTION_VIEW, gmm)
-                                    startActivity(ctx, intent, null)
-                                }
-                            },
-                            shape = shape
-                        ) { Icon(Icons.Filled.Directions, null); Spacer(Modifier.width(6.dp)); Text("Directions") }
+                    /* ---------------------------- Trip Card (navigate) ---------------------------- */
+                    Spacer(Modifier.height(24.dp))
+                    Column(Modifier.padding(horizontal = 16.dp)) {
+                        Text("Trip Card", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Spacer(Modifier.height(8.dp))
+                        FilledTonalButton(
+                            onClick = { onOpenTripCard() },
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Filled.Share, contentDescription = null) // reuse share icon, or swap to an image icon you prefer
+                            Spacer(Modifier.width(8.dp))
+                            Text("Create Trip Card")
+                        }
                     }
 
-                    // Open now
+
+                    /* --------------------------- Open now chip --------------------------- */
                     openingNow?.let { open ->
+                        Spacer(Modifier.height(16.dp))
                         Surface(
                             modifier = Modifier
                                 .padding(horizontal = 16.dp)
@@ -615,6 +665,7 @@ fun PlaceDetailsScreen(
                             .fillMaxWidth()
                     ) {
                         Column(Modifier.padding(14.dp)) {
+                            var yourName by remember { mutableStateOf("") }
                             OutlinedTextField(
                                 value = yourName,
                                 onValueChange = { yourName = it },
