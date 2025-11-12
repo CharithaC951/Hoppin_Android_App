@@ -192,22 +192,23 @@ private fun FullWidthRecommendationCard(
  * DistanceChip
  *
  * Small surface that displays a human-friendly distance string.
- * - Converts meters >= 1000 into kilometers and rounds to one decimal.
- * - For distances < 1000, renders meters as an integer.
+ * - Converts meters >= 1609 into miles (1 mile = 1609.34 m) and rounds to one decimal.
+ * - For distances < 1609, renders feet as an integer (1 meter = 3.28084 feet).
  *
  * @param meters Distance in meters.
  * @param modifier Modifier for positioning (default = Modifier).
  */
 @Composable
 private fun DistanceChip(meters: Double, modifier: Modifier = Modifier) {
-    // Convert meters to a human-friendly string and unit
-    val (value, unit, text) = if (meters >= 1000) {
-        val km = (meters / 100.0).roundToInt() / 10.0
-        Triple(km, "km", "$km km")
+    // Convert meters to a human-friendly string and unit in imperial (mi/ft)
+    val (value, unit, text) = if (meters >= 1609) {
+        val miles = ((meters / 1609.34) * 10).roundToInt() / 10.0
+        Triple(miles, "mi", "$miles mi")
     } else {
-        val m = meters.roundToInt()
-        Triple(m.toDouble(), "m", "$m m")
+        val feet = (meters * 3.28084).roundToInt()
+        Triple(feet.toDouble(), "ft", "$feet ft")
     }
+
     Surface(
         modifier = modifier,
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),

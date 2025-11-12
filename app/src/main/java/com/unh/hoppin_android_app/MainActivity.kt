@@ -144,10 +144,15 @@ class MainActivity : ComponentActivity() {
                                     val placeId = backStackEntry.arguments!!.getString("placeId")!!
                                     PlaceDetailsScreen(
                                         placeId = placeId,
-                                        onBack = { navController.popBackStack() }
+                                        onBack = { navController.popBackStack() },
+                                        onOpenTripCard = {navController.navigate("tripcard")}
                                     )
                                 }
+                                composable(route="tripcard")
+                                {backStackEntry ->
+                                    TripCardScreen (onBack = { navController.popBackStack() })
 
+                                }
                                 composable("favorites") {
                                     com.unh.hoppin_android_app.FavoritesScreen(
                                         onBack = { navController.popBackStack() },
@@ -228,10 +233,15 @@ class MainActivity : ComponentActivity() {
                                 val placeId = backStackEntry.arguments!!.getString("placeId")!!
                                 PlaceDetailsScreen(
                                     placeId = placeId,
-                                    onBack = { navController.popBackStack() }
+                                    onBack = { navController.popBackStack() },
+                                    onOpenTripCard = {navController.navigate("tripcard")}
                                 )
                             }
+                            composable(route="tripcard")
+                            {backStackEntry ->
+                                TripCardScreen (onBack = { navController.popBackStack() })
 
+                            }
                             composable("favorites") {
                                 com.unh.hoppin_android_app.FavoritesScreen(
                                     onBack = { navController.popBackStack() },
