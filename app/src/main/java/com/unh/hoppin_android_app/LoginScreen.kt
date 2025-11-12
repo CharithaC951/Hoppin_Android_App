@@ -279,7 +279,6 @@ private fun SignInUI(
                             } else {
                                 Log.w("Firebase", "signInWithEmail:failure", task.exception)
                                 Toast.makeText(context, "Invalid username or password.", Toast.LENGTH_LONG).show()
-                                onLoginSuccess("User")
                                 isLoading = false
                             }
                         }
