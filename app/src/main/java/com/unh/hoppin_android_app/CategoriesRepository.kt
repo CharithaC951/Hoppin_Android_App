@@ -80,38 +80,35 @@ object CategoriesRepository {
             SubCategory("bars", "Bars", listOf("bar"), R.drawable.bar)
         ),
         3 to listOf(
-            SubCategory("movies", "Movie Theater", listOf("movie_theater"), R.drawable.museum),
-            SubCategory("night", "Nightlife", listOf("night_club"), R.drawable.museum),
-            SubCategory("bowling", "Bowling", listOf("bowling_alley"), R.drawable.museum),
-            SubCategory("casino", "Casino", listOf("casino"), R.drawable.museum)
+            SubCategory("movies", "Movie Theater", listOf("movie_theater"), R.drawable.theater),
+            SubCategory("night", "Nightlife", listOf("night_club"), R.drawable.nightlife),
+            SubCategory("casino", "Casino", listOf("casino"), R.drawable.casino)
         ),
         4 to listOf(
-            SubCategory("malls", "Malls", listOf("shopping_mall"), R.drawable.museum),
-            SubCategory("clothes", "Clothing", listOf("clothing_store"), R.drawable.museum),
-            SubCategory("dept", "Dept. Stores", listOf("department_store"), R.drawable.museum),
-            SubCategory("groceries", "Groceries", listOf("supermarket", "store"), R.drawable.museum)
+            SubCategory("malls", "Malls", listOf("shopping_mall"), R.drawable.shopping),
+            SubCategory("clothes", "Clothing", listOf("clothing_store"), R.drawable.closet),
+            SubCategory("groceries", "Groceries", listOf("supermarket", "store","department_store"), R.drawable.groceries)
         ),
         5 to listOf(
-            SubCategory("spa", "Spa", listOf("spa"), R.drawable.museum),
-            SubCategory("stays", "Stay / Lodging", listOf("lodging"), R.drawable.museum),
-            SubCategory("camp", "Campground", listOf("campground"), R.drawable.museum),
+            SubCategory("spa", "Spa", listOf("spa"), R.drawable.spa),
+            SubCategory("stays", "Lodging", listOf("lodging"), R.drawable.lodging),
+            SubCategory("camp", "Campground", listOf("campground"), R.drawable.salon),
         ),
         6 to listOf(
-            SubCategory("gym", "Gym", listOf("gym"), R.drawable.museum),
-            SubCategory("pharmacy", "Pharmacy", listOf("pharmacy"), R.drawable.museum),
-            SubCategory("doctor", "Doctors", listOf("doctor"), R.drawable.museum),
-            SubCategory("salon", "Beauty Salon", listOf("beauty_salon"), R.drawable.museum)
+            SubCategory("gym", "Gym", listOf("gym"), R.drawable.gym),
+            SubCategory("pharmacy", "Pharmacy", listOf("pharmacy"), R.drawable.pharmacy),
+            SubCategory("salon", "Beauty Salon", listOf("beauty_salon"), R.drawable.salon)
         ),
         7 to listOf(
-            SubCategory("hospital", "Hospitals", listOf("hospital"), R.drawable.museum),
-            SubCategory("police", "Police", listOf("police"), R.drawable.museum),
-            SubCategory("fire", "Fire Stations", listOf("fire_station"), R.drawable.museum)
+            SubCategory("hospital", "Hospitals", listOf("hospital"), R.drawable.hospital),
+            SubCategory("police", "Police", listOf("police"), R.drawable.police),
+            SubCategory("fire", "Fire Stations", listOf("fire_station"), R.drawable.fire)
         ),
         8 to listOf(
-            SubCategory("post", "Post Office", listOf("post_office"), R.drawable.museum),
-            SubCategory("bank", "Bank & ATM", listOf("bank", "atm"), R.drawable.museum),
-            SubCategory("gas", "Gas Station", listOf("gas_station"), R.drawable.museum),
-            SubCategory("auto", "Auto Repair", listOf("car_repair"), R.drawable.museum)
+            SubCategory("post", "Post Office", listOf("post_office"), R.drawable.post),
+            SubCategory("bank", "Bank & ATM", listOf("bank", "atm"), R.drawable.bank),
+            SubCategory("gas", "Gas Station", listOf("gas_station"), R.drawable.gas),
+            SubCategory("auto", "Auto Repair", listOf("car_repair"), R.drawable.services)
         )
     )
 

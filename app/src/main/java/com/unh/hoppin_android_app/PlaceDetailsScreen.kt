@@ -2,19 +2,27 @@
 
 package com.unh.hoppin_android_app
 
+import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Directions
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -24,33 +32,30 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat.startActivity
 import com.google.android.gms.tasks.Tasks
 import com.google.android.libraries.places.api.Places
+import com.google.android.libraries.places.api.model.PhotoMetadata
 import com.google.android.libraries.places.api.model.Place
 import com.google.android.libraries.places.api.net.FetchPhotoRequest
+import com.google.android.libraries.places.api.net.FetchPlaceRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import android.content.Intent
-import androidx.core.content.ContextCompat.startActivity
-import com.google.android.libraries.places.api.net.FetchPlaceRequest
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
-import com.google.android.libraries.places.api.model.PhotoMetadata
-import kotlin.collections.isNotEmpty
-import kotlin.collections.take
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.outlined.FavoriteBorder
-import androidx.compose.material.icons.filled.Share
-
+import com.google.firebase.Timestamp
+import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.Query
+import com.google.firebase.ktx.Firebase
+import com.google.firebase.firestore.ktx.firestore
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
+import com.google.firebase.auth.ktx.auth
 
 private fun extractEditorialSummary(place: Place): String? {
     val s = place.editorialSummary ?: return null
     runCatching { s.javaClass.getMethod("getOverview").invoke(s) as? String }
-        .getOrNull()
-        ?.let { return it }
+        .getOrNull()?.let { return it }
     runCatching { s.javaClass.getMethod("getText").invoke(s) as? String }
-        .getOrNull()
-        ?.let { return it }
+        .getOrNull()?.let { return it }
     return null
 }
 
@@ -72,7 +77,7 @@ private fun buildFallbackDescription(
     openingNow: Boolean?,
     priceLevel: Int?
 ): String {
-    val city = address?.substringAfterLast(",")?.trim() // crude city-ish pull
+    val city = address?.substringAfterLast(",")?.trim()
     val typeText = types?.firstOrNull()?.name
         ?.lowercase()
         ?.replace('_', ' ')
@@ -98,12 +103,24 @@ private fun buildFallbackDescription(
         .joinToString(" — ")
 }
 
+data class Review(
+    val id: String = "",
+    val author: String = "Anonymous",
+    val rating: Int = 0,             // 1..5
+    val text: String = "",
+    val createdAt: Timestamp = Timestamp.now()
+)
+
+/* ------------------------ Screen ------------------------ */
+
 @Composable
 fun PlaceDetailsScreen(
     placeId: String,
     onBack: () -> Unit
 ) {
     val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
 
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -115,17 +132,27 @@ fun PlaceDetailsScreen(
     var phone by remember { mutableStateOf<String?>(null) }
     var website by remember { mutableStateOf<Uri?>(null) }
     var latLng by remember { mutableStateOf<com.google.android.gms.maps.model.LatLng?>(null) }
-    var photo by remember { mutableStateOf<Bitmap?>(null) }
     var openingNow by remember { mutableStateOf<Boolean?>(null) }
+
     var photos by remember { mutableStateOf<List<Bitmap>>(emptyList()) }
     var editorial by remember { mutableStateOf<String?>(null) }
     var isFav by remember { mutableStateOf(false) }
 
+    // Reviews (Firestore live)
+    var reviews by remember { mutableStateOf<List<Review>>(emptyList()) }
+
+    // Editor card state
+    var yourName by remember { mutableStateOf("") }
+    var myRating by remember { mutableStateOf(0) }
+    var myReviewText by remember { mutableStateOf("") }
+    var mySubmitting by remember { mutableStateOf(false) }
+
+    /* ---------- Favorites init whenever details load ---------- */
     LaunchedEffect(placeId, name, address, rating, ratingsTotal) {
-        // initialize fav state whenever details load
         isFav = FavoritesStore.contains(placeId)
     }
 
+    /* ---------- Places fetch ---------- */
     LaunchedEffect(placeId) {
         loading = true
         error = null
@@ -150,16 +177,6 @@ fun PlaceDetailsScreen(
             val fetch = FetchPlaceRequest.builder(placeId, fields).build()
             val fetched = withContext(Dispatchers.IO) { Tasks.await(client.fetchPlace(fetch)) }
             val p = fetched.place
-            editorial = extractEditorialSummary(p)?.trim()
-                ?: buildFallbackDescription(
-                    name = p.name,
-                    address = p.address,
-                    types = p.types,
-                    rating = p.rating,
-                    ratingsTotal = p.userRatingsTotal,
-                    openingNow = openingNow,           // set a few lines later; we’ll recompute below
-                    priceLevel = p.priceLevel
-                )
 
             name = p.name
             rating = p.rating
@@ -169,7 +186,7 @@ fun PlaceDetailsScreen(
             website = p.websiteUri
             latLng = p.latLng
 
-            // ✅ Robust open/closed detection
+            // Robust open/closed detection
             openingNow = try {
                 val openHours = p.openingHours
                 val method = openHours?.javaClass?.methods?.find { it.name == "isOpenNow" }
@@ -178,8 +195,8 @@ fun PlaceDetailsScreen(
                 p.businessStatus?.name?.contains("OPEN", ignoreCase = true)
             }
 
-            if (extractEditorialSummary(p).isNullOrBlank()) {
-                editorial = buildFallbackDescription(
+            editorial = extractEditorialSummary(p)?.trim()
+                ?: buildFallbackDescription(
                     name = p.name,
                     address = p.address,
                     types = p.types,
@@ -188,13 +205,12 @@ fun PlaceDetailsScreen(
                     openingNow = openingNow,
                     priceLevel = p.priceLevel
                 )
-            }
 
+            // Photos → carousel (up to 7)
             val metas: List<PhotoMetadata> = p.photoMetadatas ?: emptyList()
             if (metas.isNotEmpty()) {
-                val take = metas.take(7)
                 val bitmaps = mutableListOf<Bitmap>()
-                for (m in take) {
+                for (m in metas.take(7)) {
                     runCatching {
                         val photoReq = FetchPhotoRequest.builder(m)
                             .setMaxWidth(1600)
@@ -205,12 +221,39 @@ fun PlaceDetailsScreen(
                     }
                 }
                 photos = bitmaps
-                photo = bitmaps.firstOrNull()
             }
         }.onFailure {
             error = it.message ?: "Failed to load place"
         }
         loading = false
+    }
+
+    /* ---------- Firestore: live Top 5 reviews listener ---------- */
+    DisposableEffect(placeId) {
+        val db = Firebase.firestore
+        val ref = db.collection("places")
+            .document(placeId)
+            .collection("reviews")
+            .orderBy("createdAt", Query.Direction.DESCENDING)
+            .limit(5)
+
+        val reg = ref.addSnapshotListener { snap, err ->
+            if (err != null) {
+                reviews = emptyList()
+                return@addSnapshotListener
+            }
+            reviews = snap?.documents?.map { doc ->
+                Review(
+                    id = doc.id,
+                    author = doc.getString("author") ?: "Anonymous",
+                    rating = (doc.getLong("rating") ?: 0L).toInt(),
+                    text = doc.getString("text") ?: "",
+                    createdAt = doc.getTimestamp("createdAt") ?: Timestamp.now()
+                )
+            } ?: emptyList()
+        }
+
+        onDispose { reg.remove() }
     }
 
     fun buildUiPlaceForFavorites(): UiPlace =
@@ -219,6 +262,47 @@ fun PlaceDetailsScreen(
             title = name ?: "",
             photo = photos.firstOrNull() ?: null,
         )
+
+    fun postReview() {
+        scope.launch {
+            mySubmitting = true
+            runCatching {
+                // Ensure we have an auth user (anonymous ok)
+                val auth = Firebase.auth
+                if (auth.currentUser == null) {
+                    auth.signInAnonymously().await()
+                }
+                val uid = Firebase.auth.currentUser!!.uid
+
+                val author = yourName.ifBlank { "Anonymous" }
+                val ratingSafe = myRating.coerceIn(1, 5)
+                val text = myReviewText.trim()
+
+                val data = mapOf(
+                    "userId" to uid,                           // 🔑 REQUIRED BY YOUR RULES
+                    "author" to author,
+                    "rating" to ratingSafe,
+                    "text" to text,
+                    "createdAt" to FieldValue.serverTimestamp() // server time (rules accept 'timestamp')
+                )
+
+                Firebase.firestore.collection("places")
+                    .document(placeId)
+                    .collection("reviews")
+                    .add(data)
+                    .await()
+            }.onSuccess {
+                yourName = ""
+                myRating = 0
+                myReviewText = ""
+                snackbarHostState.showSnackbar("Thanks for your review!")
+            }.onFailure { e ->
+                snackbarHostState.showSnackbar("Failed to post review: ${e.localizedMessage ?: "Unknown error"}")
+                android.util.Log.e("PlaceDetailsScreen", "Review create failed", e)
+            }
+            mySubmitting = false
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -230,7 +314,8 @@ fun PlaceDetailsScreen(
                     }
                 }
             )
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { inner ->
         when {
             loading -> Box(
@@ -253,7 +338,7 @@ fun PlaceDetailsScreen(
                         .verticalScroll(rememberScrollState())
                         .padding(inner)
                 ) {
-                    // --- Carousel ---
+                    /* ------------------------ Carousel ------------------------ */
                     if (photos.isNotEmpty()) {
                         val pagerState = rememberPagerState(initialPage = 0, pageCount = { photos.size })
                         Column {
@@ -322,6 +407,7 @@ fun PlaceDetailsScreen(
 
                     Spacer(Modifier.height(16.dp))
 
+                    // Favorite + Share
                     Row(
                         modifier = Modifier
                             .padding(top = 12.dp)
@@ -375,6 +461,7 @@ fun PlaceDetailsScreen(
                         }
                     }
 
+                    // About
                     Column(Modifier.padding(horizontal = 16.dp)) {
                         Text("About", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                         Spacer(Modifier.height(8.dp))
@@ -388,13 +475,12 @@ fun PlaceDetailsScreen(
                     // Quick actions
                     Row(
                         modifier = Modifier
-                            .padding(horizontal = 16.dp)
+                            .padding(horizontal = 16.dp, vertical = 16.dp)
                             .fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         val shape = RoundedCornerShape(16.dp)
 
-                        // Call
                         OutlinedButton(
                             onClick = {
                                 phone?.let { tel ->
@@ -403,13 +489,8 @@ fun PlaceDetailsScreen(
                                 }
                             },
                             shape = shape
-                        ) {
-                            Icon(Icons.Filled.Phone, contentDescription = null)
-                            Spacer(Modifier.width(6.dp))
-                            Text("Call")
-                        }
+                        ) { Icon(Icons.Filled.Phone, null); Spacer(Modifier.width(6.dp)); Text("Call") }
 
-                        // Website
                         OutlinedButton(
                             onClick = {
                                 website?.let { uri ->
@@ -418,13 +499,8 @@ fun PlaceDetailsScreen(
                                 }
                             },
                             shape = shape
-                        ) {
-                            Icon(Icons.Filled.Language, contentDescription = null)
-                            Spacer(Modifier.width(6.dp))
-                            Text("Website")
-                        }
+                        ) { Icon(Icons.Filled.Language, null); Spacer(Modifier.width(6.dp)); Text("Website") }
 
-                        // Directions
                         OutlinedButton(
                             onClick = {
                                 latLng?.let { ll ->
@@ -434,16 +510,11 @@ fun PlaceDetailsScreen(
                                 }
                             },
                             shape = shape
-                        ) {
-                            Icon(Icons.Filled.Directions, contentDescription = null)
-                            Spacer(Modifier.width(6.dp))
-                            Text("Directions")
-                        }
+                        ) { Icon(Icons.Filled.Directions, null); Spacer(Modifier.width(6.dp)); Text("Directions") }
                     }
 
                     // Open now
                     openingNow?.let { open ->
-                        Spacer(Modifier.height(16.dp))
                         Surface(
                             modifier = Modifier
                                 .padding(horizontal = 16.dp)
@@ -461,7 +532,135 @@ fun PlaceDetailsScreen(
                         }
                     }
 
+                    /* ------------------------- Top Reviews (Firestore) ------------------------ */
                     Spacer(Modifier.height(24.dp))
+                    Text(
+                        text = "Top Reviews",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                    Spacer(Modifier.height(12.dp))
+
+                    Column(
+                        modifier = Modifier
+                            .padding(horizontal = 16.dp)
+                            .fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        if (reviews.isEmpty()) {
+                            ElevatedCard(
+                                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 4.dp),
+                                shape = RoundedCornerShape(16.dp),
+                            ) {
+                                Column(Modifier.padding(14.dp)) {
+                                    Text(
+                                        "No reviews yet. Be the first to write one!",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        } else {
+                            reviews.forEach { r ->
+                                ElevatedCard(
+                                    shape = RoundedCornerShape(16.dp),
+                                    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 6.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(Modifier.padding(14.dp)) {
+                                        Row {
+                                            (1..5).forEach { i ->
+                                                Icon(
+                                                    imageVector = if (i <= r.rating) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                                                    contentDescription = null
+                                                )
+                                            }
+                                        }
+                                        Spacer(Modifier.height(6.dp))
+                                        Text(
+                                            text = r.author.ifBlank { "Anonymous" },
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        Spacer(Modifier.height(2.dp))
+                                        if (r.text.isNotBlank()) {
+                                            Text(r.text, style = MaterialTheme.typography.bodyMedium)
+                                            Spacer(Modifier.height(4.dp))
+                                        }
+                                        Text(
+                                            r.createdAt.toDate().toString(), // format as needed
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    /* ---------------------- Write a review (editor card) -------------------- */
+                    Spacer(Modifier.height(24.dp))
+                    Text(
+                        text = "Write a review",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                    Spacer(Modifier.height(8.dp))
+
+                    ElevatedCard(
+                        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 6.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier
+                            .padding(horizontal = 16.dp)
+                            .fillMaxWidth()
+                    ) {
+                        Column(Modifier.padding(14.dp)) {
+                            OutlinedTextField(
+                                value = yourName,
+                                onValueChange = { yourName = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                label = { Text("Your name (optional)") },
+                                singleLine = true
+                            )
+
+                            Spacer(Modifier.height(10.dp))
+
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                (1..5).forEach { i ->
+                                    IconButton(onClick = { myRating = i }) {
+                                        Icon(
+                                            imageVector = if (i <= myRating) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                                            contentDescription = "Rate $i"
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(Modifier.height(8.dp))
+
+                            OutlinedTextField(
+                                value = myReviewText,
+                                onValueChange = { myReviewText = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                label = { Text("Add your comment") },
+                                placeholder = { Text("What did you like? Any tips for others?") },
+                                minLines = 3,
+                                maxLines = 6
+                            )
+
+                            Spacer(Modifier.height(10.dp))
+
+                            Button(
+                                onClick = { postReview() },
+                                enabled = !mySubmitting && myRating in 1..5 && myReviewText.isNotBlank(),
+                                modifier = Modifier.align(Alignment.End)
+                            ) {
+                                Text(if (mySubmitting) "Posting…" else "Post")
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(28.dp))
                 }
             }
         }

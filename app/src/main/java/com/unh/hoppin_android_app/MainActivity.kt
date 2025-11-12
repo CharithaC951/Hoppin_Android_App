@@ -30,6 +30,10 @@ import com.google.android.gms.tasks.CancellationTokenSource
 import com.google.android.libraries.places.api.Places
 import com.unh.hoppin_android_app.ui.theme.Hoppin_Android_AppTheme
 import kotlinx.coroutines.launch
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.content.Context
+import android.os.Build
 
 const val USER_NAME_ARG = "Hopper"
 const val HOME_ROUTE_PATTERN = "Home/{$USER_NAME_ARG}"
@@ -42,6 +46,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         val splash = installSplashScreen()
         super.onCreate(savedInstanceState)
+        createNotificationChannel()
         if (!Places.isInitialized()) {
             Places.initialize(this, PLACES_API_KEY)
         }
@@ -301,6 +306,19 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val name = "Hoppin App Notifications"
+            val descriptionText = "Channel for general app notifications"
+            val importance = NotificationManager.IMPORTANCE_DEFAULT
+            val channel = NotificationChannel("HOPPIN_CHANNEL_ID", name, importance).apply {
+                description = descriptionText
+            }
+            val notificationManager: NotificationManager =
+                getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
         }
     }
 }
