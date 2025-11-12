@@ -38,6 +38,7 @@ import com.google.maps.android.compose.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+import androidx.compose.foundation.layout.ExperimentalLayoutApi // For FlowRow experimental opt-in
 
 enum class ExploreType { RESTAURANTS, ENTERTAINMENT, TOURISM, SHOPPING, EMERGENCY }
 
@@ -104,7 +105,7 @@ fun MapScreen(
                 apiKey = mapsApiKey,
                 center = center,
                 exploreType = selected,
-                radiusMeters = 20.0 * 1609.344, // 20 miles ≈ 32,187 m
+                radiusMeters = 20.0 * 1609.344, // 20 miles ≈ 32,187 m (upper bound)
                 maxCount = 10
             )
         } catch (e: Exception) {
@@ -202,6 +203,7 @@ fun MapScreen(
 // -----------------------------
 //  Explore Bar UI
 // -----------------------------
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ExploreBar(
     selected: ExploreType,
@@ -301,7 +303,7 @@ private fun ZoomControls(
 }
 
 // -----------------------------
-//  Fetch Logic
+//  Places Client Helper
 // -----------------------------
 private fun getPlacesClient(context: android.content.Context, apiKey: String): PlacesClient {
     if (!Places.isInitialized()) {
@@ -310,6 +312,9 @@ private fun getPlacesClient(context: android.content.Context, apiKey: String): P
     return Places.createClient(context)
 }
 
+// -----------------------------
+//  Fetch Logic (multi-category, distance-first, smart radius)
+// -----------------------------
 private suspend fun fetchPlacesByExploreType(
     context: android.content.Context,
     apiKey: String,
@@ -320,47 +325,102 @@ private suspend fun fetchPlacesByExploreType(
 ): List<PlacePin> = withContext(Dispatchers.IO) {
     val client = getPlacesClient(context, apiKey)
 
-    // Expanded type groups per category
-    val types: List<String> = when (exploreType) {
-        // Restaurants: restaurants, cafes, bars (incl. pubs/coffee shops)
-        ExploreType.RESTAURANTS -> listOf(
-            "restaurant", "cafe", "coffee_shop", "bar", "pub"
-        )
-        // Entertainment: movie theaters, nightlife, play areas/arcades/bowling
-        ExploreType.ENTERTAINMENT -> listOf(
-            "movie_theater", "night_club", "bar", "amusement_center", "bowling_alley", "video_arcade", "playground"
-        )
-        // Tourism: beaches, local attractions, parks/gardens/museums
-        ExploreType.TOURISM -> listOf(
-            "tourist_attraction", "park", "national_park", "beach", "botanical_garden", "museum", "art_gallery"
-        )
-        // Shopping: malls + groceries + general retail
-        ExploreType.SHOPPING -> listOf(
-            "shopping_mall", "supermarket", "grocery_store", "department_store", "convenience_store", "market"
-        )
-        // Emergency: fire, police, hospital
-        ExploreType.EMERGENCY -> listOf(
-            "fire_station", "police", "hospital"
-        )
+    // --- Multi-type groups for each button (primary + secondary/legacy) ---
+    val primaryTypes: List<String>
+    val secondaryTypes: List<String>
+    when (exploreType) {
+        ExploreType.RESTAURANTS -> {
+            // Bars, cafés, restaurants, coffee shops, pubs
+            primaryTypes = listOf("restaurant", "cafe", "bar", "coffee_shop", "pub")
+            secondaryTypes = listOf("meal_takeaway", "meal_delivery", "bakery")
+        }
+        ExploreType.ENTERTAINMENT -> {
+            primaryTypes = listOf("movie_theater", "night_club", "bowling_alley", "amusement_center")
+            secondaryTypes = listOf("video_arcade", "casino", "tourist_attraction")
+        }
+        ExploreType.TOURISM -> {
+            primaryTypes = listOf("tourist_attraction", "park", "national_park", "museum", "art_gallery", "botanical_garden", "beach")
+            secondaryTypes = listOf("zoo", "aquarium", "campground")
+        }
+        ExploreType.SHOPPING -> {
+            primaryTypes = listOf("shopping_mall", "department_store", "clothing_store", "supermarket", "grocery_store", "convenience_store", "market")
+            secondaryTypes = listOf("electronics_store", "home_goods_store", "shoe_store", "jewelry_store", "book_store")
+        }
+        ExploreType.EMERGENCY -> {
+            primaryTypes = listOf("hospital", "police", "fire_station", "pharmacy")
+            secondaryTypes = emptyList()
+        }
     }
 
+    // Fields we want back (include type info for optional debugging)
     val fields = listOf(
         Place.Field.NAME,
         Place.Field.LAT_LNG,
         Place.Field.RATING,
-        Place.Field.USER_RATINGS_TOTAL
+        Place.Field.USER_RATINGS_TOTAL,
+        Place.Field.PRIMARY_TYPE,
+        Place.Field.TYPES
     )
 
-    val restriction: LocationRestriction = CircularBounds.newInstance(center, radiusMeters)
+    // Prefer DISTANCE for "near me". Begin with smaller radius; expand if needed.
+    val baseRadius = minOf(radiusMeters, 5_000.0) // start ~5 km max
+    val attempts = listOf(baseRadius, baseRadius * 2.0, minOf(radiusMeters, 20_000.0))
 
-    val request = SearchNearbyRequest.builder(restriction, fields)
-        .setIncludedTypes(types)
-        .setMaxResultCount(maxCount)
+    suspend fun queryOnce(r: Double): List<PlacePin> {
+        val restriction: LocationRestriction = CircularBounds.newInstance(center, r)
+
+        val reqBuilder = SearchNearbyRequest.builder(restriction, fields)
+            .setRankPreference(SearchNearbyRequest.RankPreference.DISTANCE)
+            .setMaxResultCount(maxCount)
+
+        if (primaryTypes.isNotEmpty()) reqBuilder.setIncludedPrimaryTypes(primaryTypes)
+        if (secondaryTypes.isNotEmpty()) reqBuilder.setIncludedTypes(secondaryTypes)
+
+        val request = reqBuilder.build()
+
+        return try {
+            val resp = client.searchNearby(request).await()
+            resp.places
+                .asSequence()
+                .filter { it.latLng != null && !it.name.isNullOrBlank() }
+                .map { p ->
+                    val rating = p.rating?.let { r ->
+                        val cnt = p.userRatingsTotal ?: 0
+                        "⭐ ${"%.1f".format(r)} ($cnt)"
+                    }
+                    PlacePin(
+                        position = p.latLng!!,
+                        title = p.name!!,
+                        subtitle = rating
+                    )
+                }
+                .toList()
+        } catch (e: Exception) {
+            e.printStackTrace()
+            emptyList()
+        }
+    }
+
+    // Try progressively wider searches until we get something decent.
+    for (r in attempts) {
+        val results = queryOnce(r)
+        if (results.isNotEmpty()) return@withContext results
+    }
+
+    // Final fallback: popularity within the full requested radius and wide types.
+    val fallbackRestriction = CircularBounds.newInstance(center, radiusMeters)
+    val fallbackRequest = SearchNearbyRequest.builder(fallbackRestriction, fields)
         .setRankPreference(SearchNearbyRequest.RankPreference.POPULARITY)
+        .setMaxResultCount(maxCount)
+        .apply {
+            if (primaryTypes.isNotEmpty()) setIncludedPrimaryTypes(primaryTypes)
+            val allLegacy = secondaryTypes + primaryTypes
+            if (allLegacy.isNotEmpty()) setIncludedTypes(allLegacy)
+        }
         .build()
 
     try {
-        val resp = client.searchNearby(request).await()
+        val resp = client.searchNearby(fallbackRequest).await()
         resp.places
             .filter { it.latLng != null && !it.name.isNullOrBlank() }
             .map { p ->
