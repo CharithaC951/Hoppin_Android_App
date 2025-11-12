@@ -9,6 +9,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -45,7 +46,6 @@ import com.google.android.libraries.places.api.net.PlacesClient
 import com.google.android.libraries.places.api.net.SearchNearbyRequest
 import com.unh.hoppin_android_app.FavoritesRepositoryFirebase
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Calendar
@@ -63,7 +63,6 @@ enum class SortOption { NEAREST, FARTHEST }
 
 data class DiscoverFilters(
     val sort: SortOption = SortOption.NEAREST,
-    val maxDistanceMeters: Int? = null,   // 500 or 1000 (null = any)
     val openNow: Boolean = false,         // client-side
     val minRating: Float? = 4.0f,         // client-side
     val onlyWithPhoto: Boolean = false,
@@ -98,7 +97,6 @@ fun DiscoverListScreen(
         mutableStateOf(
             DiscoverFilters(
                 sort = SortOption.NEAREST,
-                maxDistanceMeters = null,
                 openNow = false,
                 minRating = 4.0f
             )
@@ -156,7 +154,12 @@ fun DiscoverListScreen(
                     IconButton(onClick = onOpenFavorites) {
                         Icon(Icons.Filled.Favorite, contentDescription = "Favourites")
                     }
-                }
+                },
+                // 🔶 Color update only
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color(0xFFFFE082),   // warm yellow
+                    titleContentColor = Color(0xFF4E342E) // dark brown for contrast
+                )
             )
         },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
@@ -179,7 +182,7 @@ fun DiscoverListScreen(
                         .padding(inner)
                         .padding(horizontal = 16.dp)
                 ) {
-                    // Filter bar
+                    // Filter bar (LazyRow)
                     FilterBar(
                         filters = filters,
                         onChange = { filters = it }
@@ -253,77 +256,73 @@ private fun FilterBar(
     filters: DiscoverFilters,
     onChange: (DiscoverFilters) -> Unit
 ) {
-    Column {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        tonalElevation = 2.dp,
+        modifier = Modifier.fillMaxWidth(),
+        color = Color(0xFFFFF8E1) // 🔶 light warm background
+    ) {
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            // Distance: Any / ≤500m / ≤1km
-            DistanceChip(
-                label = "Any",
-                selected = filters.maxDistanceMeters == null,
-                onClick = { onChange(filters.copy(maxDistanceMeters = null)) }
-            )
-            DistanceChip(
-                label = "≤500 m",
-                selected = filters.maxDistanceMeters == 500,
-                onClick = { onChange(filters.copy(maxDistanceMeters = 500)) }
-            )
-            DistanceChip(
-                label = "≤1 km",
-                selected = filters.maxDistanceMeters == 1000,
-                onClick = { onChange(filters.copy(maxDistanceMeters = 1000)) }
+            // 🔶 warm chip colors
+            val selectedColor = Color(0xFFFFB300)   // amber
+            val unselectedColor = Color(0x26FFA000) // faint orange tint
+
+            @Composable
+            fun chipColors(selected: Boolean) = FilterChipDefaults.filterChipColors(
+                selectedContainerColor = if (selected) selectedColor else Color.Transparent,
+                selectedLabelColor = Color.Black,
+                containerColor = if (!selected) unselectedColor else selectedColor,
+                labelColor = Color.Black
             )
 
-            Spacer(Modifier.weight(1f))
-
-            // Sort toggle (Nearest/Farthest)
-            FilterChip(
-                selected = filters.sort == SortOption.NEAREST,
-                onClick = {
-                    onChange(
-                        filters.copy(
-                            sort = if (filters.sort == SortOption.NEAREST) SortOption.FARTHEST else SortOption.NEAREST
+            item {
+                FilterChip(
+                    selected = filters.sort == SortOption.NEAREST,
+                    onClick = {
+                        onChange(
+                            filters.copy(
+                                sort = if (filters.sort == SortOption.NEAREST) SortOption.FARTHEST else SortOption.NEAREST
+                            )
                         )
-                    )
-                },
-                label = { Text(if (filters.sort == SortOption.NEAREST) "Nearest" else "Farthest") }
-            )
-        }
-
-        Spacer(Modifier.height(8.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            // Open now
-            FilterChip(
-                selected = filters.openNow,
-                onClick = { onChange(filters.copy(openNow = !filters.openNow)) },
-                label = { Text("Open now") }
-            )
-
-            // Rating ≥ 4.0
-            FilterChip(
-                selected = (filters.minRating ?: 0f) >= 4.0f,
-                onClick = {
-                    onChange(filters.copy(minRating = if ((filters.minRating ?: 0f) >= 4.0f) null else 4.0f))
-                },
-                label = { Text("4.0+") }
-            )
+                    },
+                    label = { Text(if (filters.sort == SortOption.NEAREST) "Nearest" else "Farthest") },
+                    colors = chipColors(filters.sort == SortOption.NEAREST)
+                )
+            }
+            item {
+                FilterChip(
+                    selected = filters.openNow,
+                    onClick = { onChange(filters.copy(openNow = !filters.openNow)) },
+                    label = { Text("Open now") },
+                    colors = chipColors(filters.openNow)
+                )
+            }
+            item {
+                FilterChip(
+                    selected = (filters.minRating ?: 0f) >= 4.0f,
+                    onClick = {
+                        onChange(filters.copy(minRating = if ((filters.minRating ?: 0f) >= 4.0f) null else 4.0f))
+                    },
+                    label = { Text("4.0+") },
+                    colors = chipColors((filters.minRating ?: 0f) >= 4.0f)
+                )
+            }
+            item {
+                FilterChip(
+                    selected = filters.onlyFavorites,
+                    onClick = { onChange(filters.copy(onlyFavorites = !filters.onlyFavorites)) },
+                    label = { Text("Favorites") },
+                    colors = chipColors(filters.onlyFavorites)
+                )
+            }
         }
     }
 }
 
-@Composable
-private fun DistanceChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    FilterChip(
-        selected = selected,
-        onClick = onClick,
-        label = { Text(label) }
-    )
-}
 
 /* --------------------------- Data & Loading --------------------------- */
 
@@ -438,15 +437,9 @@ private fun applyFiltersToSection(
 ): UiSection {
     var items = section.items
 
-    f.maxDistanceMeters?.let { max ->
-        items = items.filter { (it.distanceMeters ?: Int.MAX_VALUE) <= max }
-    }
-    if (f.openNow) {
-        items = items.filter { it.isOpenNow == true }
-    }
-    f.minRating?.let { min ->
-        items = items.filter { (it.rating ?: 0f) >= min }
-    }
+    // Distance filter REMOVED (≤500m / ≤1km chips were removed)
+    if (f.openNow) items = items.filter { it.isOpenNow == true }
+    f.minRating?.let { min -> items = items.filter { (it.rating ?: 0f) >= min } }
     if (f.onlyWithPhoto) items = items.filter { it.photo != null }
     if (f.onlyFavorites) items = items.filter { favIds.contains(it.id) }
 
@@ -474,7 +467,9 @@ private fun PlaceCardMinimal(
             .fillMaxWidth()
             .clickable { onClick() },
         shape = RoundedCornerShape(18.dp),
-        elevation = CardDefaults.cardElevation(4.dp)
+        elevation = CardDefaults.cardElevation(4.dp),
+        // 🔶 warm container color
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFFDE7)) // very light yellow
     ) {
         Column {
             if (place.photo != null) {
@@ -486,10 +481,18 @@ private fun PlaceCardMinimal(
                 )
             } else {
                 Box(
-                    modifier = Modifier.fillMaxWidth().height(200.dp).background(Color(0xFFEAEAEA)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp)
+                        .background(Color(0xFFFFECB3)), // 🔶 warm placeholder
                     contentAlignment = Alignment.Center
                 ) {
-                    Box(modifier = Modifier.size(44.dp).clip(CircleShape).background(Color(0xFFD8D8D8)))
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFFFFE082)) // 🔶 lighter warm dot
+                    )
                 }
             }
 
@@ -569,14 +572,11 @@ private fun computeIsOpenNow(hours: OpeningHours?): Boolean? {
         val cMin = localTimeToMinutes(close.time) ?: continue
 
         if (oDayIdx == cDayIdx) {
-            // Same-day window (e.g., 09:00–18:00)
             if (currentIdx == oDayIdx && nowMinutes in oMin until cMin) return true
         } else if ((oDayIdx + 1) % 7 == cDayIdx) {
-            // Overnight window (e.g., Fri 18:00 – Sat 02:00)
             if (currentIdx == oDayIdx && nowMinutes >= oMin) return true
             if (currentIdx == cDayIdx && nowMinutes < cMin) return true
         } else {
-            // Multi-day span (rare; approximate at edges)
             if (currentIdx == oDayIdx && nowMinutes >= oMin) return true
             if (currentIdx == cDayIdx && nowMinutes < cMin) return true
         }
