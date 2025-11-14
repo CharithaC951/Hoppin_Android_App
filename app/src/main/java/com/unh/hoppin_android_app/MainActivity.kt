@@ -217,6 +217,9 @@ class MainActivity : ComponentActivity() {
                                     TripCardScreen (onBack = { navController.popBackStack() })
 
                                 }
+                                composable("settings") {
+                                    SettingsScreen(navController = navController)
+                                }
                                 composable("favorites") {
                                     FavoritesScreen(
                                         onBack = { navController.popBackStack() },
@@ -303,6 +306,9 @@ class MainActivity : ComponentActivity() {
                             {backStackEntry ->
                                 TripCardScreen (onBack = { navController.popBackStack() })
 
+                            }
+                            composable("settings") {
+                                SettingsScreen(navController = navController)
                             }
                             composable("favorites") {
                                 FavoritesScreen(
