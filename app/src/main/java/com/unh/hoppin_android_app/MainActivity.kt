@@ -47,9 +47,11 @@ class MainActivity : ComponentActivity() {
         val splash = installSplashScreen()
         super.onCreate(savedInstanceState)
         createNotificationChannel()
+
         if (!Places.isInitialized()) {
             Places.initialize(this, PLACES_API_KEY)
         }
+
         var keepOn = true
         lifecycleScope.launch {
             kotlinx.coroutines.delay(250)
@@ -68,9 +70,20 @@ class MainActivity : ComponentActivity() {
                     val currentRoute = currentBackStackEntry?.destination?.route
                     val showBottomBar = currentRoute != "login"
 
-                    // ---- Location plumbing to pass to DiscoverListScreen ----
+                    // ---- Location + VisitTracker setup ----
                     val context = this@MainActivity
                     val fused = remember { LocationServices.getFusedLocationProviderClient(context) }
+                    val placesClient = remember { Places.createClient(context) }
+
+                    // Our visit tracking engine (handles dwell, nearby places, rewards)
+                    val visitTracker = remember {
+                        VisitTracker(
+                            context = context,
+                            fusedClient = fused,
+                            placesClient = placesClient
+                        )
+                    }
+
                     var deviceCenter by remember { mutableStateOf<LatLng?>(null) }
 
                     val permissionLauncher = rememberLauncherForActivityResult(
@@ -79,6 +92,9 @@ class MainActivity : ComponentActivity() {
                         val allowed = granted[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
                                 granted[Manifest.permission.ACCESS_COARSE_LOCATION] == true
                         if (allowed) {
+                            // ✅ Start visit tracking once permission is granted
+                            visitTracker.start()
+
                             val token = CancellationTokenSource()
                             fused.getCurrentLocation(
                                 Priority.PRIORITY_BALANCED_POWER_ACCURACY,
@@ -98,10 +114,21 @@ class MainActivity : ComponentActivity() {
                     }
 
                     LaunchedEffect(Unit) {
-                        val fine = ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
-                        val coarse = ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION)
-                        val granted = fine == PackageManager.PERMISSION_GRANTED || coarse == PackageManager.PERMISSION_GRANTED
+                        val fine = ActivityCompat.checkSelfPermission(
+                            context,
+                            Manifest.permission.ACCESS_FINE_LOCATION
+                        )
+                        val coarse = ActivityCompat.checkSelfPermission(
+                            context,
+                            Manifest.permission.ACCESS_COARSE_LOCATION
+                        )
+                        val granted = fine == PackageManager.PERMISSION_GRANTED ||
+                                coarse == PackageManager.PERMISSION_GRANTED
+
                         if (granted) {
+                            // ✅ Permission already granted → start tracker & fetch location
+                            visitTracker.start()
+
                             val token = CancellationTokenSource()
                             fused.getCurrentLocation(
                                 Priority.PRIORITY_BALANCED_POWER_ACCURACY,
@@ -118,13 +145,23 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         } else {
-                            permissionLauncher.launch(arrayOf(
-                                Manifest.permission.ACCESS_FINE_LOCATION,
-                                Manifest.permission.ACCESS_COARSE_LOCATION
-                            ))
+                            permissionLauncher.launch(
+                                arrayOf(
+                                    Manifest.permission.ACCESS_FINE_LOCATION,
+                                    Manifest.permission.ACCESS_COARSE_LOCATION
+                                )
+                            )
+                        }
+                    }
+
+                    // Ensure tracker stops when the composition is torn down
+                    DisposableEffect(Unit) {
+                        onDispose {
+                            visitTracker.stop()
                         }
                     }
                     // ---------------------------------------------------------
+
 
                     if (showBottomBar) {
                         Scaffold(
@@ -155,7 +192,8 @@ class MainActivity : ComponentActivity() {
                                         nullable = false
                                     })
                                 ) { backStackEntry ->
-                                    val userName = backStackEntry.arguments?.getString(USER_NAME_ARG) ?: "Guest"
+                                    val userName =
+                                        backStackEntry.arguments?.getString(USER_NAME_ARG) ?: "Guest"
                                     HomeScreen(
                                         navController = navController,
                                         userName = userName,
@@ -184,14 +222,23 @@ class MainActivity : ComponentActivity() {
                                 composable(
                                     route = "discover?type={type}&categoryId={categoryId}",
                                     arguments = listOf(
-                                        navArgument("type") { type = NavType.StringType; defaultValue = "" },
-                                        navArgument("categoryId") { type = NavType.IntType; defaultValue = -1 }
+                                        navArgument("type") {
+                                            type = NavType.StringType
+                                            defaultValue = ""
+                                        },
+                                        navArgument("categoryId") {
+                                            type = NavType.IntType
+                                            defaultValue = -1
+                                        }
                                     )
                                 ) { backStackEntry ->
-                                    val typeArg = backStackEntry.arguments?.getString("type").orEmpty()
-                                    val categoryId = backStackEntry.arguments?.getInt("categoryId") ?: -1
+                                    val typeArg =
+                                        backStackEntry.arguments?.getString("type").orEmpty()
+                                    val categoryId =
+                                        backStackEntry.arguments?.getInt("categoryId") ?: -1
                                     DiscoverListScreen(
-                                        selectedTypes = typeArg.split(',').filter { it.isNotBlank() },
+                                        selectedTypes = typeArg.split(',')
+                                            .filter { it.isNotBlank() },
                                         selectedCategoryId = categoryId.takeIf { it != -1 },
                                         center = deviceCenter, // ✅ pass device location when available
                                         onBack = { navController.popBackStack() },
@@ -203,19 +250,20 @@ class MainActivity : ComponentActivity() {
                                 }
                                 composable(
                                     route = "place/{placeId}",
-                                    arguments = listOf(navArgument("placeId") { type = NavType.StringType })
+                                    arguments = listOf(navArgument("placeId") {
+                                        type = NavType.StringType
+                                    })
                                 ) { backStackEntry ->
-                                    val placeId = backStackEntry.arguments!!.getString("placeId")!!
+                                    val placeId =
+                                        backStackEntry.arguments!!.getString("placeId")!!
                                     PlaceDetailsScreen(
                                         placeId = placeId,
                                         onBack = { navController.popBackStack() },
-                                        onOpenTripCard = {navController.navigate("tripcard")}
+                                        onOpenTripCard = { navController.navigate("tripcard") }
                                     )
                                 }
-                                composable(route="tripcard")
-                                {backStackEntry ->
-                                    TripCardScreen (onBack = { navController.popBackStack() })
-
+                                composable(route = "tripcard") { backStackEntry ->
+                                    TripCardScreen(onBack = { navController.popBackStack() })
                                 }
                                 composable("settings") {
                                     SettingsScreen(navController = navController)
@@ -245,7 +293,8 @@ class MainActivity : ComponentActivity() {
                                     nullable = false
                                 })
                             ) { backStackEntry ->
-                                val userName = backStackEntry.arguments?.getString(USER_NAME_ARG) ?: "Guest"
+                                val userName =
+                                    backStackEntry.arguments?.getString(USER_NAME_ARG) ?: "Guest"
                                 HomeScreen(
                                     navController = navController,
                                     userName = userName,
@@ -274,14 +323,23 @@ class MainActivity : ComponentActivity() {
                             composable(
                                 route = "discover?type={type}&categoryId={categoryId}",
                                 arguments = listOf(
-                                    navArgument("type") { type = NavType.StringType; defaultValue = "" },
-                                    navArgument("categoryId") { type = NavType.IntType; defaultValue = -1 }
+                                    navArgument("type") {
+                                        type = NavType.StringType
+                                        defaultValue = ""
+                                    },
+                                    navArgument("categoryId") {
+                                        type = NavType.IntType
+                                        defaultValue = -1
+                                    }
                                 )
                             ) { backStackEntry ->
-                                val typeArg = backStackEntry.arguments?.getString("type").orEmpty()
-                                val categoryId = backStackEntry.arguments?.getInt("categoryId") ?: -1
+                                val typeArg =
+                                    backStackEntry.arguments?.getString("type").orEmpty()
+                                val categoryId =
+                                    backStackEntry.arguments?.getInt("categoryId") ?: -1
                                 DiscoverListScreen(
-                                    selectedTypes = typeArg.split(',').filter { it.isNotBlank() },
+                                    selectedTypes = typeArg.split(',')
+                                        .filter { it.isNotBlank() },
                                     selectedCategoryId = categoryId.takeIf { it != -1 },
                                     center = deviceCenter, // ✅ pass device location here as well
                                     onBack = { navController.popBackStack() },
@@ -293,19 +351,20 @@ class MainActivity : ComponentActivity() {
                             }
                             composable(
                                 route = "place/{placeId}",
-                                arguments = listOf(navArgument("placeId") { type = NavType.StringType })
+                                arguments = listOf(navArgument("placeId") {
+                                    type = NavType.StringType
+                                })
                             ) { backStackEntry ->
-                                val placeId = backStackEntry.arguments!!.getString("placeId")!!
+                                val placeId =
+                                    backStackEntry.arguments!!.getString("placeId")!!
                                 PlaceDetailsScreen(
                                     placeId = placeId,
                                     onBack = { navController.popBackStack() },
-                                    onOpenTripCard = {navController.navigate("tripcard")}
+                                    onOpenTripCard = { navController.navigate("tripcard") }
                                 )
                             }
-                            composable(route="tripcard")
-                            {backStackEntry ->
-                                TripCardScreen (onBack = { navController.popBackStack() })
-
+                            composable(route = "tripcard") { backStackEntry ->
+                                TripCardScreen(onBack = { navController.popBackStack() })
                             }
                             composable("settings") {
                                 SettingsScreen(navController = navController)
@@ -324,6 +383,7 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val name = "Hoppin App Notifications"
