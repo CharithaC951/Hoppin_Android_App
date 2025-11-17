@@ -7,6 +7,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.FirebaseAuth
+import com.unh.hoppin_android_app.NotificationRepositoryFirebase
 import com.unh.hoppin_android_app.dataStore
 
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -79,6 +80,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                                 successMessage = "Password updated successfully!",
                                 showPasswordUpdateNotification = true
                             )
+                            viewModelScope.launch {
+                                NotificationRepositoryFirebase.createNotification(
+                                    title = "Account Security",
+                                    message = "Your password was updated successfully."
+                                )
+                            }
                         } else {
                             _uiState.value = _uiState.value.copy(
                                 isLoading = false,
