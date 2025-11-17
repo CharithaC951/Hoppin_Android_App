@@ -296,6 +296,9 @@ class MainActivity : ComponentActivity() {
                                         }
                                     )
                                 }
+                                composable("notifications") {
+                                    NotificationsScreen(navController = navController)
+                                }
                             }
                         }
                     } else {
@@ -409,6 +412,9 @@ class MainActivity : ComponentActivity() {
                                     }
                                 )
                             }
+                            composable("notifications") {
+                                NotificationsScreen(navController = navController)
+                            }
                         }
                     }
                 }
@@ -421,7 +427,7 @@ class MainActivity : ComponentActivity() {
             val name = "Hoppin App Notifications"
             val descriptionText = "Channel for general app notifications"
             val importance = NotificationManager.IMPORTANCE_DEFAULT
-            val channel = NotificationChannel("HOPPIN_CHANNEL_ID", name, importance).apply {
+            val channel = NotificationChannel(HOPPIN_CHANNEL_ID, name, importance).apply {
                 description = descriptionText
             }
             val notificationManager: NotificationManager =

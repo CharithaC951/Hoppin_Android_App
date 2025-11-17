@@ -11,7 +11,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlin.collections.filterNot
 
 class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -23,21 +22,34 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     private val placesRepository = PlacesRepository(application.applicationContext)
 
+    // Map replies → Places API types
+    private val replyToQuery = mapOf(
+        "Restaurants" to "restaurant",
+        "Cafes" to "cafe",
+        "Bar & Breweries" to "bar",
+        "Near by" to "restaurant",
+        "Popular" to "restaurant",
+        "Cuisine Type" to "restaurant",
+        "American" to "american restaurant",
+        "Mexican" to "mexican restaurant",
+        "Indian" to "indian restaurant"
+    )
+
     private val conversationFlow = mapOf(
         "START" to ConversationStep(
-            botMessages = listOf("Welcome !!!", "Ready to Hoppin?", "where you wanna Hoppin next"),
-            replies = listOf( "Explore", "Refresh", "Relax")
+            botMessages = listOf("Welcome !!!", "Ready to Hoppin?", "Where you wanna Hoppin next?"),
+            replies = listOf("Explore", "Refresh", "Relax")
         ),
         "Refresh" to ConversationStep(
-            botMessages = listOf("What are you looking under Refresh"),
+            botMessages = listOf("What are you looking for under Refresh?"),
             replies = listOf("Restaurants", "Cafes", "Bar & Breweries")
         ),
         "Restaurants" to ConversationStep(
-            botMessages = listOf("how do you wanna go with"),
+            botMessages = listOf("How do you want to go with?"),
             replies = listOf("Near by", "Popular", "Cuisine Type")
         ),
         "Cuisine Type" to ConversationStep(
-            botMessages = listOf("What cuisine you are looking for?"),
+            botMessages = listOf("What cuisine are you looking for?"),
             replies = listOf("American", "Mexican", "Indian")
         )
     )
@@ -47,15 +59,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun startConversation() {
-        val initialStep = conversationFlow["START"]
-        initialStep?.let { step ->
-            viewModelScope.launch {
-                for (message in step.botMessages) {
-                    addBotMessage(ChatMessage(message, Author.BOT))
-                    delay(800)
-                }
-                _quickReplies.value = step.replies
+        val first = conversationFlow["START"] ?: return
+        viewModelScope.launch {
+            for (msg in first.botMessages) {
+                addBotMessage(ChatMessage(msg, Author.BOT))
+                delay(700)
             }
+            _quickReplies.value = first.replies
         }
     }
 
@@ -63,32 +73,34 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _messages.value += ChatMessage(reply, Author.USER)
         _quickReplies.value = emptyList()
 
-        val finalCuisines = listOf("American", "Mexican", "Indian")
-        if (reply in finalCuisines) {
-            findPlaces(reply, userLocation)
+        // If the reply should trigger a Places API search
+        if (replyToQuery.containsKey(reply)) {
+            val type = replyToQuery[reply]!!
+            searchPlaces(type, reply, userLocation)
             return
         }
 
-        val nextStep = conversationFlow[reply]
+        // Otherwise go to normal flow
+        val next = conversationFlow[reply]
         viewModelScope.launch {
-            delay(1000)
-            if (nextStep != null) {
-                for (message in nextStep.botMessages) {
-                    addBotMessage(ChatMessage(message, Author.BOT))
-                    delay(800)
+            delay(600)
+            if (next != null) {
+                for (msg in next.botMessages) {
+                    addBotMessage(ChatMessage(msg, Author.BOT))
+                    delay(600)
                 }
-                _quickReplies.value = nextStep.replies
+                _quickReplies.value = next.replies
             } else {
-                addBotMessage(ChatMessage("Sorry, I can't help with that yet!", Author.BOT))
+                addBotMessage(ChatMessage("I can't help with that yet!", Author.BOT))
             }
         }
     }
 
-    private fun findPlaces(cuisine: String, userLocation: LatLng?) {
+    private fun searchPlaces(query: String, displayName: String, userLocation: LatLng?) {
         if (userLocation == null) {
             addBotMessage(
                 ChatMessage(
-                    "I can't seem to find your location. Please enable location services and try again.",
+                    "Couldn't detect location. Please enable location services.",
                     Author.BOT
                 )
             )
@@ -96,43 +108,42 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         viewModelScope.launch {
+            // loading bubble
             addBotMessage(
                 ChatMessage(
-                    "Okay, searching for ${cuisine.lowercase()} restaurants near you...",
-                    Author.BOT,
+                    text = "Searching for $displayName near you...",
+                    author = Author.BOT,
                     isLoading = true
                 )
             )
 
-            val result = placesRepository.searchNearbyPlaces(
-                query = "restaurant",
-                userLocation = userLocation
-            )
+            val result = placesRepository.searchNearbyPlaces(query, userLocation)
 
+            // Remove loading bubble
             _messages.value = _messages.value.filterNot { it.isLoading }
 
             result.onSuccess { places ->
-                if (places.isNotEmpty()) {
+                if (places.isEmpty()) {
                     addBotMessage(
                         ChatMessage(
-                            "Here are some places I found:",
-                            Author.BOT,
-                            places = places
+                            text = "No $displayName found nearby.",
+                            author = Author.BOT
                         )
                     )
                 } else {
                     addBotMessage(
                         ChatMessage(
-                            "Sorry, I couldn't find any ${cuisine.lowercase()} restaurants nearby.",
-                            Author.BOT
+                            text = "Here are some $displayName:",
+                            author = Author.BOT,
+                            places = places
                         )
                     )
                 }
             }.onFailure {
                 addBotMessage(
                     ChatMessage(
-                        "Oops! Something went wrong while searching. Please try again.",
-                        Author.BOT
+                        text = "Something went wrong while searching for $displayName.",
+                        author = Author.BOT
                     )
                 )
             }
@@ -144,4 +155,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 }
 
-data class ConversationStep(val botMessages: List<String>, val replies: List<String>)
+data class ConversationStep(
+    val botMessages: List<String>,
+    val replies: List<String>
+)

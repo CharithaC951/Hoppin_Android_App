@@ -88,6 +88,14 @@ fun SettingsScreen(
 
             if (uiState.notificationsEnabled) {
                 if (notificationPermissionState.status.isGranted) {
+
+                    NotificationHelper.showSimpleNotification(
+                        context = context,
+                        notificationId = 1, // Unique ID for this type of notification
+                        title = "Hoppin Account Security",
+                        text = "Your password has been updated successfully."
+
+                    )
                     showPasswordUpdateNotification(context)
                 } else {
                     notificationPermissionState.launchPermissionRequest()
