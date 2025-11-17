@@ -230,7 +230,7 @@ fun DiscoverListScreen(
                                             onToggleFavorite = {
                                                 transientAdded = transientAdded + place.id
                                                 scope.launch {
-                                                    runCatching { FavoritesRepositoryFirebase.add(place.id) }
+                                                    runCatching { FavoritesRepositoryFirebase.add(place.title,place.id) }
                                                     snackbarHostState.currentSnackbarData?.dismiss()
                                                     snackbarHostState.showSnackbar("Added to favourites")
                                                     kotlinx.coroutines.delay(1000)
