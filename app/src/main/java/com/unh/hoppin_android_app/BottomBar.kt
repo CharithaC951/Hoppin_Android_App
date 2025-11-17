@@ -52,8 +52,8 @@ fun AppBottomBar(
             selectedIcon = Icons.Filled.FavoriteBorder
         ),
         BottomItem(
-            route = "alerts",
-            label = "Alerts",
+            route = "notifications",
+            label = "Notifications",
             icon = Icons.Outlined.Notifications,
             selectedIcon = Icons.Filled.Notifications
         ),
