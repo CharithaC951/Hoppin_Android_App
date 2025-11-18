@@ -2,18 +2,12 @@
     @file:Suppress("DEPRECATION")
     
     package com.unh.hoppin_android_app
-    
-    import android.Manifest
+
     import android.content.Intent
     import android.graphics.Bitmap
     import android.net.Uri
-    import android.os.Build
-    import androidx.activity.compose.rememberLauncherForActivityResult
-    import androidx.activity.result.PickVisualMediaRequest
-    import androidx.activity.result.contract.ActivityResultContracts
     import androidx.compose.foundation.Image
     import androidx.compose.foundation.background
-    import androidx.compose.foundation.clickable
     import androidx.compose.foundation.layout.*
     import androidx.compose.foundation.lazy.LazyRow
     import androidx.compose.foundation.pager.HorizontalPager
@@ -29,20 +23,18 @@
     import androidx.compose.material.icons.filled.Phone
     import androidx.compose.material.icons.filled.Share
     import androidx.compose.material.icons.filled.Star
-    import androidx.compose.material.icons.outlined.FavoriteBorder
     import androidx.compose.material.icons.outlined.StarBorder
     import androidx.compose.material3.*
     import androidx.compose.runtime.*
     import androidx.compose.ui.Alignment
     import androidx.compose.ui.Modifier
-    import androidx.compose.ui.draw.clip
     import androidx.compose.ui.graphics.asImageBitmap
     import androidx.compose.ui.layout.ContentScale
     import androidx.compose.ui.platform.LocalContext
     import androidx.compose.ui.text.font.FontWeight
     import androidx.compose.ui.unit.dp
     import androidx.core.content.ContextCompat.startActivity
-    import coil.compose.AsyncImage
+    import androidx.lifecycle.viewmodel.compose.viewModel
     import com.google.android.gms.tasks.Tasks
     import com.google.android.libraries.places.api.Places
     import com.google.android.libraries.places.api.model.PhotoMetadata
@@ -59,7 +51,8 @@
     import kotlinx.coroutines.launch
     import kotlinx.coroutines.tasks.await
     import com.google.firebase.auth.ktx.auth
-    
+    import com.unh.hoppin_android_app.viewmodels.TripItinerariesViewModel
+
     /* ------------------------ Editorial helpers ------------------------ */
     
     private fun extractEditorialSummary(place: Place): String? {
@@ -150,7 +143,6 @@
     
         var photos by remember { mutableStateOf<List<Bitmap>>(emptyList()) }
         var editorial by remember { mutableStateOf<String?>(null) }
-        var isFav by remember { mutableStateOf(false) }
     
         // Reviews (Firestore live)
         var reviews by remember { mutableStateOf<List<Review>>(emptyList()) }
@@ -160,12 +152,15 @@
         var myRating by remember { mutableStateOf(0) }
         var myReviewText by remember { mutableStateOf("") }
         var mySubmitting by remember { mutableStateOf(false) }
-    
-        /* ---------- Favorites init whenever details load ---------- */
-        LaunchedEffect(placeId, name, address, rating, ratingsTotal) {
-            isFav = FavoritesStore.contains(placeId)
-        }
-    
+
+        val tripVm: TripItinerariesViewModel = viewModel()
+        val itineraries by tripVm.itineraries.collectAsState()
+        var showTripDialog by remember { mutableStateOf(false) }
+
+        // True if this place appears in any of the user's itineraries
+        val isInAnyTrip = itineraries.any { it.placeIds.contains(placeId) }
+
+
         /* ---------- Places fetch ---------- */
         LaunchedEffect(placeId) {
             loading = true
@@ -269,13 +264,6 @@
     
             onDispose { reg.remove() }
         }
-    
-        fun buildUiPlaceForFavorites(): UiPlace =
-            UiPlace(
-                id = placeId,
-                title = name ?: "",
-                photo = photos.firstOrNull() ?: null,
-            )
     
         fun postReview(placeName: String) {
             val ctxScope = scope
@@ -434,29 +422,39 @@
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            // Favorite (toggle)
+                            // --- Add to Trip button ---
+                            // --- Add / Remove Trip button (TOGGLE) ---
                             item {
                                 FilledTonalButton(
                                     onClick = {
-                                        if (isFav) {
-                                            FavoritesStore.remove(placeId)
-                                            isFav = false
+                                        if (isInAnyTrip) {
+                                            // Remove this place from all itineraries where it appears
+                                            val affected = itineraries.filter { it.placeIds.contains(placeId) }
+                                            affected.forEach { trip ->
+                                                tripVm.removePlaceFromItinerary(trip.id, placeId)
+                                            }
+                                            scope.launch {
+                                                snackbarHostState.showSnackbar("Removed from trip itineraries")
+                                            }
                                         } else {
-                                            FavoritesStore.add(buildUiPlaceForFavorites())
-                                            isFav = true
+                                            // Not in any trip yet → open picker dialog
+                                            showTripDialog = true
                                         }
                                     },
                                     shape = shape
                                 ) {
                                     Icon(
-                                        imageVector = if (isFav) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                                        contentDescription = if (isFav) "Remove from favorites" else "Add to favorites"
+                                        imageVector = Icons.Filled.Star,
+                                        contentDescription = if (isInAnyTrip) "Remove from trips" else "Add to trip itinerary"
                                     )
                                     Spacer(Modifier.width(6.dp))
-                                    Text(if (isFav) "Favorited" else "Favorite")
+                                    Text(
+                                        text = if (isInAnyTrip) "Remove from Trips" else "Add to Trip"
+                                    )
                                 }
                             }
-    
+
+
                             // Share
                             item {
                                 FilledTonalButton(
@@ -722,4 +720,48 @@
                 }
             }
         }
+
+        // ---------------------- Add to Trip Dialog ----------------------
+        if (showTripDialog) {
+            AlertDialog(
+                onDismissRequest = { showTripDialog = false },
+                title = { Text("Add to Trip Itinerary") },
+                text = {
+                    if (itineraries.isEmpty()) {
+                        Text(
+                            "You don't have any trip itineraries yet.\n" +
+                                    "Create one in the Trips section, then come back and add this place.",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    } else {
+                        Column {
+                            Text(
+                                "Choose a trip to add this place:",
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            itineraries.forEach { itinerary ->
+                                FilledTonalButton(
+                                    onClick = {
+                                        tripVm.addPlaceToItinerary(itinerary.id, placeId)
+                                        showTripDialog = false
+                                    },
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(itinerary.name)
+                                }
+                                Spacer(Modifier.height(6.dp))
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showTripDialog = false }) {
+                        Text("Close")
+                    }
+                }
+            )
+        }
+
     }

@@ -19,6 +19,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat.getSystemService
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavType
@@ -285,9 +286,6 @@ class MainActivity : ComponentActivity() {
                                 composable(route = "tripcard") {
                                     TripCardScreen(onBack = { navController.popBackStack() })
                                 }
-                                composable("settings") {
-                                    SettingsScreen(navController = navController)
-                                }
                                 composable("favorites") {
                                     FavoritesScreen(
                                         onBack = { navController.popBackStack() },
@@ -299,6 +297,39 @@ class MainActivity : ComponentActivity() {
                                 composable("notifications") {
                                     NotificationsScreen(navController = navController)
                                 }
+                                composable("settings") {
+                                    SettingsScreen(
+                                        navController = navController,
+                                        onBack = { navController.popBackStack() },
+                                        onOpenTrips = { navController.navigate("itineraries") }
+                                    )
+                                }
+
+                                composable("itineraries") {
+                                    TripItinerariesScreen(
+                                        onBack = { navController.popBackStack() },
+                                        onOpenItinerary = { itineraryId ->
+                                            navController.navigate("itinerary/$itineraryId")
+                                        }
+                                    )
+                                }
+
+                                composable(
+                                    "itinerary/{itineraryId}",
+                                    arguments = listOf(navArgument("itineraryId") { type = NavType.StringType })
+                                ) { backStackEntry ->
+
+                                    val itineraryId = backStackEntry.arguments?.getString("itineraryId") ?: ""
+
+                                    ItineraryDetailScreen(
+                                        itineraryId = itineraryId,
+                                        onBack = { navController.popBackStack() },
+                                        onPlaceClick = { placeId ->
+                                            navController.navigate("place/$placeId")
+                                        }
+                                    )
+                                }
+
                             }
                         }
                     } else {
@@ -401,9 +432,6 @@ class MainActivity : ComponentActivity() {
                             composable(route = "tripcard") {
                                 TripCardScreen(onBack = { navController.popBackStack() })
                             }
-                            composable("settings") {
-                                SettingsScreen(navController = navController)
-                            }
                             composable("favorites") {
                                 FavoritesScreen(
                                     onBack = { navController.popBackStack() },
@@ -415,6 +443,41 @@ class MainActivity : ComponentActivity() {
                             composable("notifications") {
                                 NotificationsScreen(navController = navController)
                             }
+                            composable("settings") {
+                                SettingsScreen(
+                                    navController = navController,
+                                    onBack = { navController.popBackStack() },
+                                    onOpenTrips = { navController.navigate("itineraries") }
+                                )
+                            }
+
+                            composable("itineraries") {
+                                TripItinerariesScreen(
+                                    onBack = { navController.popBackStack() },
+                                    onOpenItinerary = { itineraryId ->
+                                        navController.navigate("itinerary/$itineraryId")
+                                    }
+                                )
+                            }
+                            composable(
+                                "itinerary/{itineraryId}",
+                                arguments = listOf(navArgument("itineraryId") { type = NavType.StringType })
+                            ) { backStackEntry ->
+
+                                val itineraryId = backStackEntry.arguments?.getString("itineraryId") ?: ""
+
+                                ItineraryDetailScreen(
+                                    itineraryId = itineraryId,
+                                    onBack = { navController.popBackStack() },
+                                    onPlaceClick = { placeId ->
+                                        navController.navigate("place/$placeId")
+                                    }
+                                )
+                            }
+
+
+
+
                         }
                     }
                 }

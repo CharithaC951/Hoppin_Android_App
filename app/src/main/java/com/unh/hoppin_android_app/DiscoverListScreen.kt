@@ -453,7 +453,7 @@ private fun applyFiltersToSection(
 /* --------------------------- Card UI --------------------------- */
 
 @Composable
-private fun PlaceCardMinimal(
+fun PlaceCardMinimal(
     place: UiPlace,
     isFavorited: Boolean,
     onClick: () -> Unit,
