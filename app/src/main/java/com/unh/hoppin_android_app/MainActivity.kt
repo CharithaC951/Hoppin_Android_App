@@ -7,6 +7,7 @@ import android.os.Build
 import android.os.Bundle
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -280,12 +281,23 @@ class MainActivity : ComponentActivity() {
                                     PlaceDetailsScreen(
                                         placeId = placeId,
                                         onBack = { navController.popBackStack() },
-                                        onOpenTripCard = { navController.navigate("tripcard") }
+                                        onOpenTripCard = { placeName ->
+                                            val encodedName = Uri.encode(placeName)
+                                            navController.navigate("tripcard/$encodedName")
+                                        }
                                     )
                                 }
-                                composable(route = "tripcard") {
-                                    TripCardScreen(onBack = { navController.popBackStack() })
+                                composable(
+                                    route = "tripCard/{placeName}",
+                                    arguments = listOf(navArgument("placeName") { type = NavType.StringType })
+                                ) { backStackEntry ->
+                                    val placeNameArg = backStackEntry.arguments?.getString("placeName") ?: ""
+                                    TripCardScreen(
+                                        placeName = placeNameArg,
+                                        onBack = { navController.popBackStack() }
+                                    )
                                 }
+
                                 composable("favorites") {
                                     FavoritesScreen(
                                         onBack = { navController.popBackStack() },
@@ -426,12 +438,23 @@ class MainActivity : ComponentActivity() {
                                 PlaceDetailsScreen(
                                     placeId = placeId,
                                     onBack = { navController.popBackStack() },
-                                    onOpenTripCard = { navController.navigate("tripcard") }
+                                    onOpenTripCard = { placeName ->
+                                        val encodedName = Uri.encode(placeName)
+                                        navController.navigate("tripcard/$encodedName")
+                                    }
                                 )
                             }
-                            composable(route = "tripcard") {
-                                TripCardScreen(onBack = { navController.popBackStack() })
+                            composable(
+                                route = "tripCard/{placeName}",
+                                arguments = listOf(navArgument("placeName") { type = NavType.StringType })
+                            ) { backStackEntry ->
+                                val placeNameArg = backStackEntry.arguments?.getString("placeName") ?: ""
+                                TripCardScreen(
+                                    placeName = placeNameArg,
+                                    onBack = { navController.popBackStack() }
+                                )
                             }
+
                             composable("favorites") {
                                 FavoritesScreen(
                                     onBack = { navController.popBackStack() },
