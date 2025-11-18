@@ -26,6 +26,17 @@ import com.google.android.libraries.places.api.net.FetchPhotoRequest
 import com.google.android.gms.tasks.Tasks
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import android.widget.Toast
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
+import com.google.firebase.ktx.Firebase
+import com.google.firebase.firestore.ktx.firestore
+import com.google.firebase.firestore.FieldValue
+import com.google.firebase.auth.ktx.auth
+
 import kotlin.math.*
 
 @Composable
@@ -38,6 +49,9 @@ fun ItineraryDetailScreen(
     val itineraries by vm.itineraries.collectAsState()
 
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var isPublishing by remember { mutableStateOf(false) }
+
     val itinerary = itineraries.find { it.id == itineraryId }
 
     var placesUi by remember { mutableStateOf<List<UiPlace>>(emptyList()) }
@@ -45,6 +59,54 @@ fun ItineraryDetailScreen(
     var error by remember { mutableStateOf<String?>(null) }
 
     val center = LatLng(41.3100, -72.9300)
+
+    fun publishItineraryToCommon() {
+        val trip = itinerary
+        if (trip == null) {
+            Toast.makeText(context, "Trip not loaded yet.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val user = Firebase.auth.currentUser
+        if (user == null) {
+            Toast.makeText(context, "Please log in to share this trip.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        scope.launch {
+            try {
+                isPublishing = true
+
+                val db = Firebase.firestore
+
+                val data = mapOf(
+                    "userId" to user.uid,
+                    "name" to trip.name,
+                    "description" to trip.description,
+                    "placeIds" to trip.placeIds,
+                    "createdAt" to FieldValue.serverTimestamp(),
+                    "updatedAt" to FieldValue.serverTimestamp()
+                )
+
+                // 🔥 This is the "itineraries common to all users" collection
+                db.collection("itineraries_all")
+                    .document(trip.id)   // reuse same ID; or use db.collection(...).document() for random
+                    .set(data)
+                    .await()
+
+                Toast.makeText(context, "Trip shared with all users.", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                Toast.makeText(
+                    context,
+                    "Failed to share trip: ${e.localizedMessage ?: "Unknown error"}",
+                    Toast.LENGTH_LONG
+                ).show()
+            } finally {
+                isPublishing = false
+            }
+        }
+    }
+
 
     LaunchedEffect(itinerary?.placeIds) {
         val ids = itinerary?.placeIds ?: emptyList()
@@ -75,10 +137,22 @@ fun ItineraryDetailScreen(
                     IconButton(onClick = onBack) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
                     }
+                },
+                actions = {
+                    IconButton(
+                        onClick = { publishItineraryToCommon() },
+                        enabled = itinerary != null && !isPublishing && itinerary.placeIds.isNotEmpty()
+
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Share,
+                            contentDescription = "Share trip to common itineraries"
+                        )
+                    }
                 }
-                    )
-                }
-            ) { padding ->
+            )
+        }
+    ) { padding ->
 
                 Box(
                     modifier = Modifier
@@ -144,7 +218,7 @@ fun ItineraryDetailScreen(
         }
 
                 /* SAME HELPER FUNCTIONS AS BEFORE — unchanged */
-                private suspend fun hydrateTripPlaces(
+        private suspend fun hydrateTripPlaces(
             client: com.google.android.libraries.places.api.net.PlacesClient,
             placeIds: List<String>,
             center: LatLng
@@ -197,7 +271,7 @@ fun ItineraryDetailScreen(
             result
         }
 
-                private fun computeDistanceMeters(a: LatLng, b: LatLng): Double {
+        private fun computeDistanceMeters(a: LatLng, b: LatLng): Double {
             val R = 6371000.0
             val dLat = Math.toRadians(b.latitude - a.latitude)
             val dLon = Math.toRadians(b.longitude - a.longitude)
