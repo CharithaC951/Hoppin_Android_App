@@ -18,7 +18,6 @@
     import androidx.compose.material.icons.Icons
     import androidx.compose.material.icons.filled.ArrowBack
     import androidx.compose.material.icons.filled.Directions
-    import androidx.compose.material.icons.filled.Favorite
     import androidx.compose.material.icons.filled.Language
     import androidx.compose.material.icons.filled.Phone
     import androidx.compose.material.icons.filled.Share
@@ -123,7 +122,7 @@
     fun PlaceDetailsScreen(
         placeId: String,
         onBack: () -> Unit,
-        onOpenTripCard: () -> Unit
+        onOpenTripCard: (String) -> Unit
     ) {
         val ctx = LocalContext.current
         val scope = rememberCoroutineScope()
@@ -297,7 +296,6 @@
                     yourName = ""
                     myRating = 0
                     myReviewText = ""
-                    val placeNameForNotification = name ?: "this place"
                     snackbarHostState.showSnackbar("Thanks for your review!")
                     NotificationRepositoryFirebase.createNotification(
                         title = "Review Posted",
@@ -555,7 +553,7 @@
                             Text("Trip Card", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                             Spacer(Modifier.height(8.dp))
                             FilledTonalButton(
-                                onClick = { onOpenTripCard() },
+                                onClick = { onOpenTripCard(name.orEmpty()) },
                                 shape = RoundedCornerShape(14.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
@@ -669,7 +667,6 @@
                                 .fillMaxWidth()
                         ) {
                             Column(Modifier.padding(14.dp)) {
-                                var yourName by remember { mutableStateOf("") }
                                 OutlinedTextField(
                                     value = yourName,
                                     onValueChange = { yourName = it },

@@ -2,10 +2,10 @@
 
 package com.unh.hoppin_android_app
 
+import android.Manifest
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
-import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -36,6 +36,7 @@ import coil.compose.AsyncImage
  * TripCardScreen
  *
  * Screen for creating a “Trip Card” — a visual card that includes:
+ *  - The place name
  *  - A selected photo (from gallery or picker)
  *  - A tagline or comment
  *  - A share button to share the image/text externally
@@ -45,11 +46,13 @@ import coil.compose.AsyncImage
  *  • Fallback for legacy (pre-Android 13) with READ_EXTERNAL_STORAGE permission
  *  • Shares text and image using system share sheet
  *
+ * @param placeName Name of the place this trip card is for.
  * @param onBack Callback when back button is pressed (used by navigation).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TripCardScreen(
+    placeName: String,
     onBack: () -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -66,6 +69,7 @@ fun TripCardScreen(
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted -> hasStoragePermission = granted }
+
     val getContentLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
     ) { uri -> if (uri != null) pickedImageUri = uri }
@@ -102,12 +106,23 @@ fun TripCardScreen(
 
     /**
      * Shares the selected image (if any) and tagline text using system share sheet.
-     * Handles both text-only and image+text sharing.
+     * The text always includes the place name if available.
      */
     fun share() {
+        val composedText = buildString {
+            if (placeName.isNotBlank()) {
+                appendLine(placeName)
+            }
+            val tag = tagline.text.trim()
+            if (tag.isNotEmpty()) {
+                if (placeName.isNotBlank()) appendLine()
+                append(tag)
+            }
+        }.ifBlank { null }
+
         val send = Intent(Intent.ACTION_SEND).apply {
             type = if (pickedImageUri != null) "image/*" else "text/plain"
-            putExtra(Intent.EXTRA_TEXT, tagline.text.takeIf { it.isNotBlank() })
+            composedText?.let { putExtra(Intent.EXTRA_TEXT, it) }
             pickedImageUri?.let { uri ->
                 putExtra(Intent.EXTRA_STREAM, uri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -134,8 +149,9 @@ fun TripCardScreen(
                 .padding(innerPadding)
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
+            // Title: actual place name from navigation
             Text(
-                text = "Place name",
+                text = placeName.ifBlank { "Trip Card" },
                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
             )
 
@@ -152,7 +168,7 @@ fun TripCardScreen(
                 contentAlignment = Alignment.Center
             ) {
                 if (pickedImageUri == null) {
-                    // Show placeholder image when no photo selected
+                    // Show placeholder when no photo selected
                     Image(
                         painter = painterResource(R.drawable.hoppinbackground),
                         contentDescription = "Placeholder",
@@ -186,11 +202,12 @@ fun TripCardScreen(
                 )
                 Spacer(Modifier.width(8.dp))
 
-                // Share button (sends text and/or image)
                 IconButton(
                     onClick = { share() },
-                    modifier = Modifier.size(44.dp),
-                    shape = RoundedCornerShape(12.dp)
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.primaryContainer)
                 ) {
                     Icon(Icons.Default.Share, contentDescription = "Share")
                 }
@@ -206,5 +223,8 @@ fun TripCardScreen(
 @Preview(showBackground = true)
 @Composable
 private fun TripCardPreview() {
-    TripCardScreen(onBack = {})
+    TripCardScreen(
+        placeName = "Sample Place",
+        onBack = {}
+    )
 }

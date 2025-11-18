@@ -13,7 +13,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -85,7 +84,6 @@ fun HomeScreen(
  * Responsibilities:
  *  - Request and display device location (with fallback to a default)
  *  - Show a top greeting row with profile and quick map action
- *  - Provide a search field (UI only)
  *  - Render category row and recommendations block
  *  - Display a floating chat action button
  *
@@ -286,26 +284,6 @@ private fun HomeScreenContent(
                 color = Color.Black,
                 textAlign = TextAlign.Center
             )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            OutlinedTextField(
-                value = "",
-                onValueChange = { },
-                placeholder = { Text("Search") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search Icon") },
-                singleLine = true,
-                shape = MaterialTheme.shapes.medium,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = Color(0xFFF0F0F0),
-                    unfocusedContainerColor = Color(0xFFF0F0F0),
-                    disabledContainerColor = Color(0xFFF0F0F0),
-                    focusedBorderColor = Color.Transparent,
-                    unfocusedBorderColor = Color.Transparent,
-                ),
-                modifier = Modifier.fillMaxWidth()
-            )
-
             Spacer(modifier = Modifier.height(20.dp))
 
             BrowseCategoriesSection(navController = navController, categories = categories)
