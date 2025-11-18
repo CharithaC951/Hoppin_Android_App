@@ -11,7 +11,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
 class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
@@ -22,7 +23,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     private val placesRepository = PlacesRepository(application.applicationContext)
 
-
+    private val _navigationEvent = MutableSharedFlow<String>()
+    val navigationEvent: SharedFlow<String> = _navigationEvent
     private val replyToQuery = mapOf(
         // Refresh
         "Restaurants" to "restaurant",
@@ -127,18 +129,23 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     init {
         startConversation()
     }
-
     private fun startConversation() {
-        val first = conversationFlow["START"] ?: return
+
+        if (_messages.value.isNotEmpty()) return
+
+        val firstStep = conversationFlow["START"] ?: return
         viewModelScope.launch {
-            for (msg in first.botMessages) {
+            for (msg in firstStep.botMessages) {
                 addBotMessage(ChatMessage(msg, Author.BOT))
                 delay(700)
             }
-            _quickReplies.value = first.replies
+            _quickReplies.value = firstStep.replies
         }
     }
-
+    fun showTopLevelReplies() {
+        val firstStep = conversationFlow["START"] ?: return
+        _quickReplies.value = firstStep.replies
+    }
     fun onUserReply(reply: String, userLocation: LatLng?) {
         _messages.value += ChatMessage(reply, Author.USER)
         _quickReplies.value = emptyList()
@@ -146,7 +153,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         // If the reply should trigger a Places API search
         if (replyToQuery.containsKey(reply)) {
             val type = replyToQuery[reply]!!
-            searchPlaces(type, reply, userLocation)
+            viewModelScope.launch {
+                val route = "discover?type=$type"
+                _navigationEvent.emit(route)
+            }
             return
         }
 
