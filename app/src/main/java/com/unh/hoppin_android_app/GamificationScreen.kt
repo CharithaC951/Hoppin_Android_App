@@ -8,10 +8,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Badge
-import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.LocalDining
 import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Spa
+import androidx.compose.material.icons.filled.HealthAndSafety
+import androidx.compose.material.icons.filled.LocalHospital
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Card
@@ -46,7 +49,7 @@ fun GamificationScreen(
 ) {
     val uid = FirebaseAuth.getInstance().currentUser?.uid ?: "no-user"
 
-    // Streak state (already implemented)
+    // Streak state (already implemented in your VM)
     val streakViewModel: GamificationStreakViewModel = viewModel(key = uid)
     val streakState by streakViewModel.streak.collectAsState()
 
@@ -57,6 +60,7 @@ fun GamificationScreen(
     val scrollState = rememberScrollState()
 
     Scaffold(
+        containerColor = Color(0xFFFFFDE7), // 🌼 pale warm yellow background
         topBar = {
             TopAppBar(
                 title = { Text("Gamification") },
@@ -84,39 +88,47 @@ fun GamificationScreen(
                     .padding(top = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                // Profile icon – warm & strong
                 Surface(
                     shape = CircleShape,
-                    color = Color(0xFFE0E0E0),
+                    color = Color(0xFFFFB300), // bright amber
+                    shadowElevation = 8.dp,
+                    tonalElevation = 6.dp,
                     modifier = Modifier.size(80.dp)
                 ) {
-                    Icon(
-                        Icons.Default.Badge,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(16.dp)
-                    )
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.Badge,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(40.dp)
+                        )
+                    }
                 }
                 Spacer(Modifier.height(12.dp))
                 Text(
                     text = userName,
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
-                    color = Color.Black
+                    color = Color(0xFF3E2723)
                 )
                 Text(
                     text = "Earn streaks & badges by visiting places!",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color.Gray
+                    color = Color(0xFF6D4C41)
                 )
             }
 
             Spacer(Modifier.height(16.dp))
 
-            // ---------------- Streak Hero Card ----------------
+            // ---------------- Streak Hero Card (blue theme) ----------------
             Card(
                 shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                    containerColor = Color(0xFF1E88E5) // strong blue
                 ),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -133,30 +145,31 @@ fun GamificationScreen(
                         Text(
                             text = "Current Streak",
                             style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                            color = Color(0xFFE3F2FD) // very light blue
                         )
                         Spacer(Modifier.height(4.dp))
                         Text(
                             text = "${streakState.currentStreak} days",
                             style = MaterialTheme.typography.headlineMedium,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                            color = Color.White
                         )
                         Spacer(Modifier.height(4.dp))
                         Text(
                             text = "Best: ${streakState.bestStreak} days",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                            color = Color(0xFFBBDEFB)
                         )
                     }
 
                     Surface(
                         shape = CircleShape,
-                        color = MaterialTheme.colorScheme.primary,
+                        color = Color(0xFF0D47A1), // deeper blue for accent
                         tonalElevation = 4.dp,
+                        shadowElevation = 4.dp,
                         modifier = Modifier.size(56.dp)
                     ) {
-                        androidx.compose.foundation.layout.Box(
+                        Box(
                             modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center
                         ) {
@@ -171,11 +184,12 @@ fun GamificationScreen(
 
             Spacer(Modifier.height(12.dp))
 
-            // ---------------- Streak Milestones ----------------
+            // ---------------- Streak Milestones (blue-ish chips) ----------------
             Text(
                 "Streak Milestones",
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
+                color = Color(0xFF1A237E)
             )
             Spacer(Modifier.height(8.dp))
             val targets = listOf(1, 3, 7, 14, 30)
@@ -190,102 +204,53 @@ fun GamificationScreen(
             Text(
                 "Category Badges",
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
+                color = Color(0xFF3E2723)
             )
             Spacer(Modifier.height(4.dp))
 
             Text(
-                text = "Visit distinct real-world places to unlock badges for each category.",
+                text = "Visit distinct real-world places to level up each category badge.",
                 style = MaterialTheme.typography.bodySmall,
-                color = Color.Gray
+                color = Color(0xFF6D4C41)
             )
 
             Spacer(Modifier.height(12.dp))
 
-            // Helper to read tier from state
-            fun tier(catId: Int): Int = categoryState.tiers[catId] ?: 0
+            // Helper to read visits for a category from state
+            fun visitsFor(catId: Int): Int = categoryState.visits[catId] ?: 0
 
-            // Define your badges: category + minimum tier required
-            val themed = remember {
+            // One badge per category, using your 1–8 mapping
+            val badges = remember {
                 listOf(
-                    // Category 1 (Explore)
-                    BadgeItem(
-                        title = "Explorer",
-                        rule = "Bronze: Explore places",
-                        icon = Icons.Default.Explore,
-                        categoryId = 1,
-                        minTier = 1 // Bronze+
-                    ),
-                    BadgeItem(
-                        title = "Trailblazer",
-                        rule = "Gold: Explore a lot",
-                        icon = Icons.Default.Explore,
-                        categoryId = 1,
-                        minTier = 3 // Gold+
-                    ),
-
-                    // Category 2 (Refresh)
-                    BadgeItem(
-                        title = "Foodie",
-                        rule = "Bronze: Restaurants, cafes & bars",
-                        icon = Icons.Default.LocalDining,
-                        categoryId = 2,
-                        minTier = 1
-                    ),
-                    BadgeItem(
-                        title = "Gourmet",
-                        rule = "Gold: Many Refresh spots",
-                        icon = Icons.Default.LocalDining,
-                        categoryId = 2,
-                        minTier = 3
-                    ),
-
-                    // Category 4 (ShopStop)
-                    BadgeItem(
-                        title = "ShopStopper",
-                        rule = "Bronze: Shopping & stores",
-                        icon = Icons.Default.Map,
-                        categoryId = 4,
-                        minTier = 1
-                    ),
-
-                    // Category 6 (Wellbeing)
-                    BadgeItem(
-                        title = "Wellbeing Hero",
-                        rule = "Bronze: Gyms, clinics, salons",
-                        icon = Icons.Default.Badge,
-                        categoryId = 6,
-                        minTier = 1
-                    ),
-
-                    // Generic travel/photography (based on Explore category)
-                    BadgeItem(
-                        title = "Photographer",
-                        rule = "Silver: Capture your trips",
-                        icon = Icons.Default.CameraAlt,
-                        categoryId = 1,
-                        minTier = 2 // Silver+
-                    )
+                    BadgeItem("Explore", Icons.Default.Explore, categoryId = 1),
+                    BadgeItem("Refresh", Icons.Default.LocalDining, categoryId = 2),
+                    BadgeItem("Entertain", Icons.Default.Map, categoryId = 3),
+                    BadgeItem("ShopStop", Icons.Default.Map, categoryId = 4),
+                    BadgeItem("Relax", Icons.Default.Spa, categoryId = 5),
+                    BadgeItem("Wellbeing", Icons.Default.HealthAndSafety, categoryId = 6),
+                    BadgeItem("Emergency", Icons.Default.LocalHospital, categoryId = 7),
+                    BadgeItem("Services", Icons.Default.Build, categoryId = 8)
                 )
             }
 
-            // Grid layout – 3 per row
-            themed.chunked(3).forEach { row ->
+            // Grid layout – 2 per row
+            badges.chunked(2).forEach { row ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     row.forEach { item ->
-                        val achieved = tier(item.categoryId) >= item.minTier
+                        val visits = visitsFor(item.categoryId)
                         BadgeCircle(
                             item = item,
-                            achieved = achieved,
+                            visits = visits,
                             modifier = Modifier
                                 .weight(1f)
                                 .padding(vertical = 10.dp)
                         )
                     }
-                    repeat(3 - row.size) {
+                    if (row.size == 1) {
                         Spacer(Modifier.weight(1f))
                     }
                 }
@@ -323,11 +288,11 @@ private fun StreakRow(
                 } else null,
                 colors = AssistChipDefaults.assistChipColors(
                     containerColor = if (isOn)
-                        MaterialTheme.colorScheme.primaryContainer
+                        Color(0xFFE3F2FD) // light blue
                     else
-                        MaterialTheme.colorScheme.surface,
+                        Color(0xFFFFFFFF),
                     labelColor = if (isOn)
-                        MaterialTheme.colorScheme.onPrimaryContainer
+                        Color(0xFF0D47A1)
                     else
                         MaterialTheme.colorScheme.onSurface
                 )
@@ -337,49 +302,61 @@ private fun StreakRow(
 }
 
 /**
- * One badge definition: which category it belongs to & min tier required.
+ * One badge definition: one per category.
+ *
+ * 1 – Explore
+ * 2 – Refresh
+ * 3 – Entertain
+ * 4 – ShopStop
+ * 5 – Relax
+ * 6 – Wellbeing
+ * 7 – Emergency
+ * 8 – Services
  */
 private data class BadgeItem(
     val title: String,
-    val rule: String,
     val icon: ImageVector,
-    val categoryId: Int,
-    val minTier: Int
+    val categoryId: Int
 )
 
 @Composable
 private fun BadgeCircle(
     item: BadgeItem,
-    achieved: Boolean,
+    visits: Int,
     modifier: Modifier = Modifier
 ) {
+    val locked = visits <= 0
+    val tierLabel = tierLabelForVisits(visits)
+    val bgColor = if (locked) Color(0xFFF5F5F5) else categoryColor(item.categoryId)
+    val borderColor = if (locked) Color(0xFFCFD8DC) else categoryColor(item.categoryId)
+    val iconTint = if (locked) Color(0xFF9E9E9E) else Color.White
+
+    val statusText = when {
+        locked -> "Locked"
+        visits == 1 -> "$tierLabel · 1 visit"
+        else -> "$tierLabel · $visits visits"
+    }
+
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        val tint = if (achieved) MaterialTheme.colorScheme.primary else Color(0xFFB0BEC5)
-
         Surface(
             shape = CircleShape,
-            tonalElevation = if (achieved) 4.dp else 0.dp,
-            color = if (achieved)
-                MaterialTheme.colorScheme.primaryContainer
-            else
-                Color(0xFFF5F5F5),
-            border = BorderStroke(
-                1.dp,
-                if (achieved) MaterialTheme.colorScheme.primary else Color(0xFFCFD8DC)
-            ),
+            tonalElevation = if (!locked) 6.dp else 0.dp,
+            shadowElevation = if (!locked) 6.dp else 0.dp,
+            color = bgColor,
+            border = BorderStroke(2.dp, borderColor),
             modifier = Modifier.size(72.dp)
         ) {
-            androidx.compose.foundation.layout.Box(
+            Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     item.icon,
-                    contentDescription = null,
-                    tint = tint
+                    contentDescription = item.title,
+                    tint = iconTint
                 )
             }
         }
@@ -387,13 +364,69 @@ private fun BadgeCircle(
         Text(
             item.title,
             style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.SemiBold
+            fontWeight = FontWeight.SemiBold,
+            color = Color(0xFF3E2723)
         )
         Text(
-            item.rule,
+            statusText,
             style = MaterialTheme.typography.labelSmall,
-            color = Color.Gray,
+            color = Color(0xFF6D4C41),
             maxLines = 2
         )
     }
+}
+
+/* ---------------- Tier logic: thresholds + labels ---------------- */
+
+private fun tierForVisits(visits: Int): Int = when {
+    visits >= 5000 -> 10      // Mythic
+    visits >= 1000 -> 9       // Legendary
+    visits >= 500  -> 8       // Grandmaster
+    visits >= 250  -> 7       // Master
+    visits >= 100  -> 6       // Diamond
+    visits >= 50   -> 5       // Platinum
+    visits >= 25   -> 4       // Gold
+    visits >= 10   -> 3       // Silver
+    visits >= 5    -> 2       // Bronze
+    visits >= 1    -> 1       // Unlocked
+    else           -> 0       // Locked
+}
+
+private fun tierLabelForVisits(visits: Int): String = when (tierForVisits(visits)) {
+    0 -> "Locked"
+    1 -> "Unlocked"
+    2 -> "Bronze"
+    3 -> "Silver"
+    4 -> "Gold"
+    5 -> "Platinum"
+    6 -> "Diamond"
+    7 -> "Master"
+    8 -> "Grandmaster"
+    9 -> "Legendary"
+    10 -> "Mythic"
+    else -> "Unlocked"
+}
+
+/**
+ * Category-based color mapping (matching your category semantics).
+ *
+ * 1 – Explore
+ * 2 – Refresh
+ * 3 – Entertain
+ * 4 – ShopStop
+ * 5 – Relax
+ * 6 – Wellbeing
+ * 7 – Emergency
+ * 8 – Services
+ */
+private fun categoryColor(categoryId: Int): Color = when (categoryId) {
+    1 -> Color(0xFF42A5F5) // Explore – bright blue
+    2 -> Color(0xFFFF9800) // Refresh – orange
+    3 -> Color(0xFFAB47BC) // Entertain – purple
+    4 -> Color(0xFF8D6E63) // ShopStop – warm brown
+    5 -> Color(0xFF26C6DA) // Relax – aqua / chill
+    6 -> Color(0xFF66BB6A) // Wellbeing – green
+    7 -> Color(0xFFE53935) // Emergency – red
+    8 -> Color(0xFF5C6BC0) // Services – indigo
+    else -> Color(0xFFFFB300)
 }
