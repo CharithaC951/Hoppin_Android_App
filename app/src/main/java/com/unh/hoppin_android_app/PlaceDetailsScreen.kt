@@ -263,13 +263,12 @@
     
             onDispose { reg.remove() }
         }
-    
+
         fun postReview(placeName: String) {
             val ctxScope = scope
             ctxScope.launch {
                 mySubmitting = true
                 runCatching {
-                    // Ensure we have an auth user (anonymous ok)
                     val auth = Firebase.auth
                     if (auth.currentUser == null) auth.signInAnonymously().await()
                     val uid = Firebase.auth.currentUser!!.uid
@@ -278,28 +277,43 @@
                     val ratingSafe = myRating.coerceIn(1, 5)
                     val text = myReviewText.trim()
                     val placeNameForNotification = name ?: "a place"
-                    val data = mapOf(
-                        "userId" to uid,                           // REQUIRED BY YOUR RULES
+
+                    val reviewData = mapOf(
+                        "userId" to uid,
                         "author" to author,
                         "rating" to ratingSafe,
                         "text" to text,
                         "createdAt" to FieldValue.serverTimestamp()
                     )
-    
-                    Firebase.firestore.collection("places")
+
+                    val db = Firebase.firestore
+
+                    // 1) Store under the place (existing behavior)
+                    db.collection("places")
                         .document(placeId)
                         .collection("reviews")
-                        .add(data)
+                        .add(reviewData)
                         .await()
+
+                    // 2) Store in global reviews_all for Feed
+                    val globalData = reviewData + mapOf(
+                        "placeId" to placeId,
+                        "placeName" to placeNameForNotification
+                    )
+
+                    db.collection("reviews_all")
+                        .add(globalData)
+                        .await()
+
                     return@runCatching placeNameForNotification
-                }.onSuccess {
+                }.onSuccess { pn ->
                     yourName = ""
                     myRating = 0
                     myReviewText = ""
                     snackbarHostState.showSnackbar("Thanks for your review!")
                     NotificationRepositoryFirebase.createNotification(
                         title = "Review Posted",
-                        message = "Your review for '$placeName' has been published."
+                        message = "Your review for '$pn' has been published."
                     )
                 }.onFailure { e ->
                     snackbarHostState.showSnackbar("Failed to post review: ${e.localizedMessage ?: "Unknown error"}")
@@ -308,7 +322,7 @@
                 mySubmitting = false
             }
         }
-    
+
         Scaffold(
             topBar = {
                 TopAppBar(
