@@ -22,28 +22,98 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     private val placesRepository = PlacesRepository(application.applicationContext)
 
-    // Map replies → Places API types
+
     private val replyToQuery = mapOf(
+        // Refresh
         "Restaurants" to "restaurant",
         "Cafes" to "cafe",
-        "Bar & Breweries" to "bar",
-        "Near by" to "restaurant",
-        "Popular" to "restaurant",
-        "Cuisine Type" to "restaurant",
-        "American" to "american restaurant",
-        "Mexican" to "mexican restaurant",
-        "Indian" to "indian restaurant"
+        "Bars" to "bar",
+        // Explore
+        "Museums" to "museum",
+        "Art Gallery" to "art_gallery",
+        "Parks" to "park",
+        "Attractions" to "tourist_attraction",
+        // Entertain
+        "Movie Theater" to "movie_theater",
+        "Nightlife" to "night_club",
+        "Casino" to "casino",
+        // ShopStop
+        "Malls" to "shopping_mall",
+        "Clothing" to "clothing_store",
+        "Groceries" to "supermarket",
+        // Relax
+        "Spa" to "spa",
+        "Lodging" to "lodging",
+        "Campground" to "campground",
+        // Wellbeing
+        "Gym" to "gym",
+        "Pharmacy" to "pharmacy",
+        "Beauty Salon" to "beauty_salon",
+        // Emergency
+        "Hospitals" to "hospital",
+        "Police" to "police",
+        "Fire Stations" to "fire_station",
+        // Services
+        "Post Office" to "post_office",
+        "Bank & ATM" to "bank",
+        "Gas Station" to "gas_station",
+        "Auto Repair" to "car_repair",
     )
 
+    // In ChatViewModel.kt
+
+    // Replace the ENTIRE conversationFlow map with this new one.
     private val conversationFlow = mapOf(
         "START" to ConversationStep(
             botMessages = listOf("Welcome !!!", "Ready to Hoppin?", "Where you wanna Hoppin next?"),
-            replies = listOf("Explore", "Refresh", "Relax")
+            // Show all top-level categories as the first set of replies
+            replies = listOf(
+                "Explore", "Refresh", "Entertain", "ShopStop",
+                "Relax", "Wellbeing", "Emergency", "Services"
+            )
         ),
-        "Refresh" to ConversationStep(
-            botMessages = listOf("What are you looking for under Refresh?"),
-            replies = listOf("Restaurants", "Cafes", "Bar & Breweries")
+
+
+        "Explore" to ConversationStep(
+            botMessages = listOf("Awesome! What kind of place would you like to explore?"),
+            replies = listOf("Museums", "Art Gallery", "Parks", "Attractions")
         ),
+
+        "Refresh" to ConversationStep( // Your existing flow, now updated
+            botMessages = listOf("Great! Where would you like to get refreshments?"),
+            replies = listOf("Restaurants", "Cafes", "Bars")
+        ),
+
+        "Entertain" to ConversationStep(
+            botMessages = listOf("Time for some fun! What are you in the mood for?"),
+            replies = listOf("Movie Theater", "Nightlife", "Casino")
+        ),
+
+        "ShopStop" to ConversationStep(
+            botMessages = listOf("Ready to shop? What are you looking for?"),
+            replies = listOf("Malls", "Clothing", "Groceries")
+        ),
+
+        "Relax" to ConversationStep(
+            botMessages = listOf("Time to unwind. What sounds best?"),
+            replies = listOf("Spa", "Lodging", "Campground")
+        ),
+
+        "Wellbeing" to ConversationStep(
+            botMessages = listOf("Focusing on wellbeing is a great choice. What do you need?"),
+            replies = listOf("Gym", "Pharmacy", "Beauty Salon")
+        ),
+
+        "Emergency" to ConversationStep(
+            botMessages = listOf("I hope everything is okay. What service do you need immediately?"),
+            replies = listOf("Hospitals", "Police", "Fire Stations")
+        ),
+
+        "Services" to ConversationStep(
+            botMessages = listOf("What kind of service can I help you find?"),
+            replies = listOf("Post Office", "Bank & ATM", "Gas Station", "Auto Repair")
+        ),
+
         "Restaurants" to ConversationStep(
             botMessages = listOf("How do you want to go with?"),
             replies = listOf("Near by", "Popular", "Cuisine Type")
