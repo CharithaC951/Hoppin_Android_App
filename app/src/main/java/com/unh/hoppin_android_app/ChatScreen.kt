@@ -25,6 +25,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavController
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.libraries.places.api.model.Place
 import com.unh.hoppin_android_app.viewmodels.LocationViewModel
@@ -47,14 +48,19 @@ import kotlin.collections.reversed
  */
 @Composable
 fun ChatScreen(
-    chatViewModel: ChatViewModel = viewModel(),
+    chatViewModel: ChatViewModel,
     locationViewModel: LocationViewModel = viewModel(),
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    navController: NavController,
 ) {
     val messages by chatViewModel.messages.collectAsState()
     val quickReplies by chatViewModel.quickReplies.collectAsState()
     val locationData by locationViewModel.locationState.collectAsState()
-
+    LaunchedEffect(Unit) {
+        chatViewModel.navigationEvent.collect { route ->
+            navController.navigate(route)
+        }
+    }
     Scaffold(
         topBar = {
             TopAppBar(

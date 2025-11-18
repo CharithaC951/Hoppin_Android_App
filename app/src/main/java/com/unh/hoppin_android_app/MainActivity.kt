@@ -23,6 +23,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat.getSystemService
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -35,6 +36,7 @@ import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.tasks.CancellationTokenSource
 import com.google.android.libraries.places.api.Places
 import com.unh.hoppin_android_app.ui.theme.Hoppin_Android_AppTheme
+import com.unh.hoppin_android_app.viewmodels.ChatViewModel
 import kotlinx.coroutines.launch
 
 const val USER_NAME_ARG = "Hopper"
@@ -223,7 +225,15 @@ class MainActivity : ComponentActivity() {
                                     GamificationScreen(navController = navController)
                                 }
                                 composable("chat") {
-                                    ChatScreen(onNavigateBack = { navController.popBackStack() })
+                                    val chatViewModel: ChatViewModel = viewModel()
+
+                                    LaunchedEffect(currentRoute) {
+
+                                        if (currentRoute == "chat") {
+                                            chatViewModel.showTopLevelReplies()
+                                        }
+                                    }
+                                    ChatScreen(navController = navController,chatViewModel = chatViewModel,onNavigateBack = { navController.popBackStack() })
                                 }
                                 composable(
                                     route = "sub/{catId}",
@@ -387,7 +397,14 @@ class MainActivity : ComponentActivity() {
                                 GamificationScreen(navController = navController)
                             }
                             composable("chat") {
-                                ChatScreen(onNavigateBack = { navController.popBackStack() })
+                                val chatViewModel: ChatViewModel = viewModel()
+
+                                LaunchedEffect(currentRoute) {
+                                    if (currentRoute == "chat") {
+                                        chatViewModel.showTopLevelReplies()
+                                    }
+                                }
+                                ChatScreen(navController = navController, chatViewModel = chatViewModel,onNavigateBack = { navController.popBackStack() })
                             }
                             composable(
                                 route = "sub/{catId}",
