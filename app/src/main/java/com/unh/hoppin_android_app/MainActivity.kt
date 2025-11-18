@@ -297,6 +297,13 @@ class MainActivity : ComponentActivity() {
                                         onBack = { navController.popBackStack() }
                                     )
                                 }
+                                composable("feed") {
+                                    FeedScreen(
+                                        onOpenItinerary = { itineraryId ->
+                                            navController.navigate("itinerary/$itineraryId")
+                                        }
+                                    )
+                                }
 
                                 composable("favorites") {
                                     FavoritesScreen(
@@ -454,6 +461,14 @@ class MainActivity : ComponentActivity() {
                                     onBack = { navController.popBackStack() }
                                 )
                             }
+                            composable("feed") {
+                                FeedScreen(
+                                    onOpenItinerary = { itineraryId ->
+                                        navController.navigate("itinerary/$itineraryId")
+                                    }
+                                )
+                            }
+
 
                             composable("favorites") {
                                 FavoritesScreen(
