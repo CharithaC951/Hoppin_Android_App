@@ -20,7 +20,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat.getSystemService
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -35,6 +34,7 @@ import com.google.android.gms.location.Priority
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.tasks.CancellationTokenSource
 import com.google.android.libraries.places.api.Places
+import com.google.android.libraries.places.api.net.PlacesClient
 import com.unh.hoppin_android_app.ui.theme.Hoppin_Android_AppTheme
 import com.unh.hoppin_android_app.viewmodels.ChatViewModel
 import kotlinx.coroutines.launch
@@ -75,8 +75,15 @@ class MainActivity : ComponentActivity() {
                     val currentRoute = currentBackStackEntry?.destination?.route
                     val showBottomBar = currentRoute != "login"
 
-                    // ---- Location + VisitTracker setup ----
                     val context = this@MainActivity
+                    val activity = this@MainActivity
+
+                    // 🔹 Create a single PlacesClient we can reuse, including for prefetch
+                    val placesClient: PlacesClient = remember {
+                        Places.createClient(context)
+                    }
+
+                    // Fused location client
                     val fused = remember {
                         LocationServices.getFusedLocationProviderClient(context)
                     }
@@ -90,6 +97,22 @@ class MainActivity : ComponentActivity() {
                     }
 
                     var deviceCenter by remember { mutableStateOf<LatLng?>(null) }
+
+                    // 🔹 One-time flag to avoid prefetching multiple times
+                    var hasPrefetched by remember { mutableStateOf(false) }
+
+                    fun maybePrefetchForCenter(center: LatLng) {
+                        if (hasPrefetched) return
+                        hasPrefetched = true
+                        activity.lifecycleScope.launch {
+                            runCatching {
+                                prefetchNearbyForCenter(
+                                    client = placesClient,
+                                    center = center
+                                )
+                            }
+                        }
+                    }
 
                     val permissionLauncher = rememberLauncherForActivityResult(
                         contract = ActivityResultContracts.RequestMultiplePermissions()
@@ -107,14 +130,19 @@ class MainActivity : ComponentActivity() {
                                 token.token
                             ).addOnSuccessListener { loc ->
                                 if (loc != null) {
-                                    deviceCenter = LatLng(loc.latitude, loc.longitude)
+                                    val center = LatLng(loc.latitude, loc.longitude)
+                                    deviceCenter = center
+                                    // 🔹 Prefetch once we know location
+                                    maybePrefetchForCenter(center)
                                 } else {
                                     fused.lastLocation.addOnSuccessListener { last ->
                                         if (last != null) {
-                                            deviceCenter = LatLng(
+                                            val center = LatLng(
                                                 last.latitude,
                                                 last.longitude
                                             )
+                                            deviceCenter = center
+                                            maybePrefetchForCenter(center)
                                         }
                                     }
                                 }
@@ -145,14 +173,18 @@ class MainActivity : ComponentActivity() {
                                 token.token
                             ).addOnSuccessListener { loc ->
                                 if (loc != null) {
-                                    deviceCenter = LatLng(loc.latitude, loc.longitude)
+                                    val center = LatLng(loc.latitude, loc.longitude)
+                                    deviceCenter = center
+                                    maybePrefetchForCenter(center)
                                 } else {
                                     fused.lastLocation.addOnSuccessListener { last ->
                                         if (last != null) {
-                                            deviceCenter = LatLng(
+                                            val center = LatLng(
                                                 last.latitude,
                                                 last.longitude
                                             )
+                                            deviceCenter = center
+                                            maybePrefetchForCenter(center)
                                         }
                                     }
                                 }
@@ -173,8 +205,6 @@ class MainActivity : ComponentActivity() {
                             visitTracker.stop()
                         }
                     }
-                    // ---------------------------------------------------------
-
 
                     if (showBottomBar) {
                         Scaffold(
@@ -228,12 +258,15 @@ class MainActivity : ComponentActivity() {
                                     val chatViewModel: ChatViewModel = viewModel()
 
                                     LaunchedEffect(currentRoute) {
-
                                         if (currentRoute == "chat") {
                                             chatViewModel.showTopLevelReplies()
                                         }
                                     }
-                                    ChatScreen(navController = navController,chatViewModel = chatViewModel,onNavigateBack = { navController.popBackStack() })
+                                    ChatScreen(
+                                        navController = navController,
+                                        chatViewModel = chatViewModel,
+                                        onNavigateBack = { navController.popBackStack() }
+                                    )
                                 }
                                 composable(
                                     route = "sub/{catId}",
@@ -269,6 +302,7 @@ class MainActivity : ComponentActivity() {
                                             .filter { it.isNotBlank() },
                                         selectedCategoryId = categoryId.takeIf { it != -1 },
                                         center = deviceCenter,
+                                        placesClient = placesClient, // use same client
                                         onBack = { navController.popBackStack() },
                                         onPlaceClick = { uiPlace ->
                                             navController.navigate("place/${uiPlace.id}")
@@ -358,7 +392,6 @@ class MainActivity : ComponentActivity() {
                                         }
                                     )
                                 }
-
                             }
                         }
                     } else {
@@ -404,7 +437,11 @@ class MainActivity : ComponentActivity() {
                                         chatViewModel.showTopLevelReplies()
                                     }
                                 }
-                                ChatScreen(navController = navController, chatViewModel = chatViewModel,onNavigateBack = { navController.popBackStack() })
+                                ChatScreen(
+                                    navController = navController,
+                                    chatViewModel = chatViewModel,
+                                    onNavigateBack = { navController.popBackStack() }
+                                )
                             }
                             composable(
                                 route = "sub/{catId}",
@@ -440,6 +477,7 @@ class MainActivity : ComponentActivity() {
                                         .filter { it.isNotBlank() },
                                     selectedCategoryId = categoryId.takeIf { it != -1 },
                                     center = deviceCenter,
+                                    placesClient = placesClient, // same client
                                     onBack = { navController.popBackStack() },
                                     onPlaceClick = { uiPlace ->
                                         navController.navigate("place/${uiPlace.id}")
@@ -486,7 +524,6 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
-
                             composable("favorites") {
                                 FavoritesScreen(
                                     onBack = { navController.popBackStack() },
@@ -529,10 +566,6 @@ class MainActivity : ComponentActivity() {
                                     }
                                 )
                             }
-
-
-
-
                         }
                     }
                 }
