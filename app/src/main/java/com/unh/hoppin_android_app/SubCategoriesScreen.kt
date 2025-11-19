@@ -25,11 +25,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
 import com.google.android.gms.maps.model.LatLng
-import com.unh.hoppin_android_app.viewmodels.RecommendationViewModel
 import kotlinx.coroutines.launch
 import kotlin.collections.getOrNull
 
@@ -37,36 +35,20 @@ import kotlin.collections.getOrNull
  * SubCategoriesScreen
  *
  * Displays subcategories for a selected top-level category.
+ * NOTE: This version does NOT hit the network – it only shows static images + titles.
  */
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun SubCategoriesScreen(
     navController: NavController,
     catId: Int,
-    vm: RecommendationViewModel = viewModel(),
-    center: LatLng = LatLng(41.31, -72.93),
+    center: LatLng = LatLng(41.31, -72.93), // kept if you need later, not used here
     perCategory: Int = 20
 ) {
     val context = LocalContext.current
-    val ui = vm.ui.collectAsState().value
 
     val category: Category? = remember(catId) { CategoriesRepository.getCategoryById(catId) }
     val subs: List<SubCategory> = remember(catId) { CategoriesRepository.subCategoriesOf(catId) }
-
-    LaunchedEffect(catId) {
-        val oneCat = category?.let { listOf(it) } ?: emptyList()
-        if (ui.sections.isEmpty()) {
-            vm.load(
-                context = context,
-                center = center,
-                categories = oneCat,
-                perCategory = perCategory,
-                fetchThumbnails = true
-            )
-        } else {
-            vm.deriveLocally(center = center, categories = oneCat, perCategory = perCategory)
-        }
-    }
 
     val pagerState = rememberPagerState(pageCount = { subs.size.coerceAtLeast(1) })
     val scope = rememberCoroutineScope()
@@ -74,7 +56,12 @@ fun SubCategoriesScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(category?.title ?: "Category", fontWeight = FontWeight.Bold) },
+                title = {
+                    Text(
+                        category?.title ?: "Category",
+                        fontWeight = FontWeight.Bold
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back")
@@ -83,69 +70,58 @@ fun SubCategoriesScreen(
             )
         }
     ) { padding ->
-        when {
-            ui.loading -> Box(
-                Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentAlignment = Alignment.Center
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+        ) {
+            // Subcategory chips
+            LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(horizontal = 8.dp)
             ) {
-                CircularProgressIndicator()
+                itemsIndexed(subs) { index, sub ->
+                    FilterChip(
+                        selected = pagerState.currentPage == index,
+                        onClick = {
+                            scope.launch { pagerState.animateScrollToPage(index) }
+                        },
+                        label = { Text(sub.title) }
+                    )
+                }
             }
-            ui.error != null -> Text(
-                text = ui.error ?: "Something went wrong",
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(16.dp)
-            )
-            else -> {
-                Column(
+
+            Spacer(Modifier.height(12.dp))
+
+            // Fullscreen pager with big images
+            HorizontalPager(
+                state = pagerState,
+                pageSpacing = 16.dp,
+                contentPadding = PaddingValues(0.dp),
+                modifier = Modifier.fillMaxSize()
+            ) { page ->
+                val sub = subs.getOrNull(page)
+                val resolvedType = resolveTypeFromTitle(sub?.title.orEmpty())
+
+                // Tap pane -> go to Discover for that type
+                Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(padding)
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .clickable(enabled = resolvedType.isNotEmpty()) {
+                            // pass both type and categoryId so Discover can use either
+                            val encodedType = resolvedType // if you need Uri.encode later, do it
+                            navController.navigate(
+                                "discover?type=$encodedType&categoryId=$catId"
+                            )
+                        }
                 ) {
-                    LazyRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp)
-                    ) {
-                        itemsIndexed(subs) { index, sub ->
-                            FilterChip(
-                                selected = pagerState.currentPage == index,
-                                onClick = {
-                                    scope.launch { pagerState.animateScrollToPage(index) }
-                                },
-                                label = { Text(sub.title) }
-                            )
-                        }
-                    }
-
-                    Spacer(Modifier.height(12.dp))
-
-                    HorizontalPager(
-                        state = pagerState,
-                        pageSpacing = 16.dp,
-                        contentPadding = PaddingValues(0.dp),
-                        modifier = Modifier.fillMaxSize()
-                    ) { page ->
-                        val sub = subs.getOrNull(page)
-                        val resolvedType = resolveTypeFromTitle(sub?.title.orEmpty())
-
-                        // ✅ Tap the pane to open the list for that sub-type
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .clickable(enabled = resolvedType.isNotEmpty()) {
-                                    navController.navigate("discover?type=$resolvedType&categoryId=")
-                                }
-                        ) {
-                            SubPaneCard(
-                                title = sub?.title ?: "",
-                                image = sub?.image ?: R.drawable.museum,
-                                height = 720.dp
-                            )
-                        }
-                    }
+                    SubPaneCard(
+                        title = sub?.title ?: "",
+                        image = sub?.image ?: R.drawable.museum,
+                        height = 720.dp
+                    )
                 }
             }
         }
@@ -217,7 +193,11 @@ private fun SubPaneCard(
 @Composable
 fun SubCategoriesPreview() {
     val navController = rememberNavController()
-    Column(modifier = Modifier.fillMaxSize().background(Color.White)) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.White)
+    ) {
         Spacer(modifier = Modifier.height(20.dp))
         SubCategoriesScreen(
             navController = navController,
