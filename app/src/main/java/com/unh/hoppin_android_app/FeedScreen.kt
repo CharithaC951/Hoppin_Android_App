@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.*
@@ -25,79 +26,142 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FeedScreen(
     modifier: Modifier = Modifier,
+    onBack: () -> Unit = {},
     onOpenItinerary: (String) -> Unit = {}
 ) {
     val vm: FeedViewModel = viewModel()
     val uiState by vm.uiState.collectAsState()
 
-    when {
-        uiState.loading -> Box(
-            modifier = modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            CircularProgressIndicator()
-        }
-
-        uiState.error != null -> Box(
-            modifier = modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = uiState.error ?: "Something went wrong",
-                color = MaterialTheme.colorScheme.error
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Community Feed") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                }
             )
         }
+    ) { innerPadding ->
 
-        else -> {
-            LazyColumn(
+        when {
+            uiState.loading -> Box(
                 modifier = modifier
                     .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.surface),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                    .padding(innerPadding),
+                contentAlignment = Alignment.Center
             ) {
-                item {
-                    Text(
-                        text = "Discover Trips from the Community",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = "See what others are exploring and read their latest reviews.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(8.dp))
-                }
+                CircularProgressIndicator()
+            }
 
-                items(uiState.itineraries, key = { it.id }) { itinerary ->
-                    val reviewsForTrip = uiState.reviews
-                        .filter { r -> itinerary.placeIds.contains(r.placeId) }
-                        .take(3)
+            uiState.error != null -> Box(
+                modifier = modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = uiState.error ?: "Something went wrong",
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
 
-                    SharedItineraryCard(
-                        itinerary = itinerary,
-                        reviews = reviewsForTrip,
-                        onOpen = { onOpenItinerary(itinerary.id) }
-                    )
-                }
-
-                if (uiState.itineraries.isEmpty()) {
+            else -> {
+                LazyColumn(
+                    modifier = modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                        .background(MaterialTheme.colorScheme.surface),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    // -------------------- Header --------------------
                     item {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 32.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                "No shared trips yet.\nShare one of your itineraries to see it here!",
-                                style = MaterialTheme.typography.bodyMedium
-                            )
+                        Text(
+                            text = "Discover Trips from the Community",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = "See what others are exploring and read their latest reviews.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(8.dp))
+                    }
+
+                    // -------------------- Shared itineraries --------------------
+                    items(uiState.itineraries, key = { it.id }) { itinerary ->
+                        val reviewsForTrip = uiState.reviews
+                            .filter { r -> itinerary.placeIds.contains(r.placeId) }
+                            .take(3)
+
+                        SharedItineraryCard(
+                            itinerary = itinerary,
+                            reviews = reviewsForTrip,
+                            onOpen = { onOpenItinerary(itinerary.id) }
+                        )
+                    }
+
+                    if (uiState.itineraries.isEmpty()) {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 32.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    "No shared trips yet.\nShare one of your itineraries to see it here!",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                        }
+                    }
+
+                    // -------------------- All reviews section --------------------
+                    item {
+                        Spacer(Modifier.height(12.dp))
+                        Divider()
+                        Spacer(Modifier.height(12.dp))
+
+                        Text(
+                            text = "All community reviews",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = "Latest reviews from Hoppin users across all places.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(8.dp))
+                    }
+
+                    if (uiState.reviews.isEmpty()) {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 8.dp, bottom = 32.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    "No reviews yet.\nStart by reviewing a place you visited!",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                        }
+                    } else {
+                        items(uiState.reviews, key = { it.id }) { review ->
+                            ReviewFeedCard(review = review)
                         }
                     }
                 }
@@ -182,6 +246,20 @@ private fun SharedItineraryCard(
                     Spacer(Modifier.height(6.dp))
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun ReviewFeedCard(review: CommonReview) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        tonalElevation = 2.dp,
+        shadowElevation = 2.dp
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            ReviewSnippetRow(review = review)
         }
     }
 }

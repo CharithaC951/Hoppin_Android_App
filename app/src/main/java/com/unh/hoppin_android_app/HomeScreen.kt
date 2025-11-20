@@ -288,7 +288,14 @@ private fun HomeScreenContent(
 
             BrowseCategoriesSection(navController = navController, categories = categories)
             Spacer(modifier = Modifier.height(20.dp))
-            RecommendationsBlock(ui = recoUi)
+            RecommendationsBlock(
+                ui = recoUi,
+                outerHorizontalPadding = 24.dp,
+                onPlaceClick = { placeId ->
+                    navController.navigate("place/$placeId")
+                }
+            )
+
             Spacer(modifier = Modifier.height(20.dp))
         }
         FloatingActionButton(
