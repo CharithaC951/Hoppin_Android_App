@@ -11,8 +11,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -47,12 +45,6 @@ import com.google.android.libraries.places.api.net.FetchPlaceRequest
 import com.google.android.libraries.places.api.net.PlacesClient
 import com.google.android.libraries.places.api.net.SearchNearbyRequest
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Calendar
@@ -62,10 +54,6 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
 
-// Keep photos small for speed
-private const val PHOTO_MAX_WIDTH = 640
-private const val PHOTO_MAX_HEIGHT = 400
-
 /* ------------------------------------------------------------------ */
 /* Filters                                                            */
 /* ------------------------------------------------------------------ */
@@ -74,69 +62,11 @@ enum class SortOption { NEAREST, FARTHEST }
 
 data class DiscoverFilters(
     val sort: SortOption = SortOption.NEAREST,
-    val openNow: Boolean = false,         // client-side
-    val minRating: Float? = 4.0f,         // client-side
+    val openNow: Boolean = false,
+    val minRating: Float? = null,
     val onlyWithPhoto: Boolean = false,
     val onlyFavorites: Boolean = false
 )
-
-/* ------------------------------------------------------------------ */
-/* Simple in-memory cache for nearby sections                         */
-/* ------------------------------------------------------------------ */
-
-private data class SectionsCacheKey(
-    val latBucket: Int,
-    val lngBucket: Int,
-    val radius: Int,
-    val maxResults: Int,
-    val typesSignature: String
-)
-
-private object DiscoverNearbyCache {
-    private val cache = mutableMapOf<SectionsCacheKey, List<UiSection>>()
-
-    fun get(key: SectionsCacheKey): List<UiSection>? = cache[key]
-
-    fun put(key: SectionsCacheKey, sections: List<UiSection>) {
-        cache[key] = sections
-    }
-
-    fun clear() {
-        cache.clear()
-    }
-}
-
-// Default set used for prefetch
-val DefaultPrefetchTypes: List<String> = listOf(
-    "restaurant",
-    "cafe",
-    "bar",
-    "bakery",
-    "tourist_attraction",
-    "museum",
-    "park",
-    "shopping_mall",
-    "clothing_store"
-)
-
-/**
- * Called from MainActivity once we know the user's location.
- * Warms cache with metadata (no photos).
- */
-suspend fun prefetchNearbyForCenter(
-    client: PlacesClient,
-    center: LatLng,
-    radiusMeters: Int = 2_000,
-    maxResults: Int = 12        // slightly smaller for speed
-) {
-    loadNearbySectionsWithPhotosDistanceRatingOpenNow(
-        client = client,
-        center = center,
-        typesOrdered = DefaultPrefetchTypes,
-        radiusMeters = radiusMeters,
-        maxResults = maxResults
-    )
-}
 
 /* ------------------------------------------------------------------ */
 /* Screen                                                             */
@@ -149,8 +79,9 @@ fun DiscoverListScreen(
     selectedCategoryId: Int? = null,
     placesClient: PlacesClient? = null,
     center: LatLng? = null,
-    radiusMeters: Int = 2_000,
-    maxResults: Int = 12,    // default reduced from 20 -> 12
+    // 🔹 just under 1 mile by default (~1600m)
+    radiusMeters: Int = 1_600,
+    maxResults: Int = 20,
     onBack: () -> Unit = {},
     onPlaceClick: (UiPlace) -> Unit = {},
     onOpenFavorites: () -> Unit = {}
@@ -159,21 +90,19 @@ fun DiscoverListScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
-    // Reuse a single PlacesClient instance
-    val client: PlacesClient = remember(placesClient, context) {
-        placesClient ?: Places.createClient(context)
-    }
-
     val favIds: Set<String> by FavoritesRepositoryFirebase.favoriteIdsFlow()
         .collectAsState(initial = emptySet())
     var transientAdded by remember { mutableStateOf(setOf<String>()) }
 
+    // 🔹 No default filters selected
     var filters by remember {
         mutableStateOf(
             DiscoverFilters(
                 sort = SortOption.NEAREST,
                 openNow = false,
-                minRating = 4.0f
+                minRating = null,
+                onlyWithPhoto = false,
+                onlyFavorites = false
             )
         )
     }
@@ -181,7 +110,7 @@ fun DiscoverListScreen(
     val dynamicTitle = remember(selectedTypes, selectedCategoryId) {
         when {
             selectedTypes.size == 1 -> readableFromType(selectedTypes.first())
-            selectedTypes.size > 1   -> "Discover"
+            selectedTypes.size > 1 -> "Discover"
             selectedCategoryId != null -> categoryTitle(selectedCategoryId)
             else -> "Discover"
         }
@@ -195,39 +124,24 @@ fun DiscoverListScreen(
         }
     }
 
-    val safeCenter = center ?: LatLng(41.3100, -72.9300) // fallback (New Haven)
     var ui by remember { mutableStateOf(ListUi(loading = true)) }
 
-    // Photo cache: placeId -> Bitmap?
-    val photoCache = remember { mutableStateMapOf<String, Bitmap?>() }
+    // 🔹 IMPORTANT: use ONLY the passed-in center (GPS from MainActivity)
+    // No more New Haven fallback here.
+    LaunchedEffect(activeTypes, center, radiusMeters, maxResults, placesClient, context) {
+        val currentCenter = center
+        if (currentCenter == null) {
+            // GPS not ready yet; just show loading
+            ui = ListUi(loading = true, sections = emptyList(), error = null)
+            return@LaunchedEffect
+        }
 
-    // Track which place IDs are actually visible in the list
-    val listState = rememberLazyListState()
-    var visiblePlaceIds by remember { mutableStateOf<Set<String>>(emptySet()) }
-
-    // Observe visible keys and map them to place IDs ("place-<id>" keys)
-    LaunchedEffect(listState) {
-        snapshotFlow { listState.layoutInfo.visibleItemsInfo }
-            .map { infos ->
-                infos.mapNotNull { item ->
-                    val key = item.key
-                    if (key is String && key.startsWith("place-")) {
-                        key.removePrefix("place-")
-                    } else null
-                }.toSet()
-            }
-            .distinctUntilChanged()
-            .collect { ids ->
-                visiblePlaceIds = ids
-            }
-    }
-
-    LaunchedEffect(activeTypes, safeCenter, radiusMeters, maxResults, client) {
         ui = ui.copy(loading = true, error = null)
+        val client = placesClient ?: Places.createClient(context)
         val result = runCatching {
             loadNearbySectionsWithPhotosDistanceRatingOpenNow(
                 client = client,
-                center = safeCenter,
+                center = currentCenter,
                 typesOrdered = activeTypes,
                 radiusMeters = radiusMeters,
                 maxResults = maxResults
@@ -262,6 +176,15 @@ fun DiscoverListScreen(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
     ) { inner ->
         when {
+            center == null -> Box(
+                Modifier
+                    .fillMaxSize()
+                    .padding(inner),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("Detecting your location…")
+            }
+
             ui.loading -> Box(
                 Modifier
                     .fillMaxSize()
@@ -283,7 +206,7 @@ fun DiscoverListScreen(
                         .padding(inner)
                         .padding(horizontal = 16.dp)
                 ) {
-                    // Filter bar
+                    // Filter bar (LazyRow)
                     FilterBar(
                         filters = filters,
                         onChange = { filters = it }
@@ -293,7 +216,6 @@ fun DiscoverListScreen(
 
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        state = listState,
                         contentPadding = PaddingValues(vertical = 12.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
@@ -303,7 +225,7 @@ fun DiscoverListScreen(
                                     Modifier.fillMaxWidth(),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Text("No near by places")
+                                    Text("No nearby places")
                                 }
                             }
                         } else {
@@ -320,28 +242,17 @@ fun DiscoverListScreen(
                                 if (section.items.isEmpty()) {
                                     item(key = "empty-${section.type}") {
                                         Text(
-                                            text = "No near by ${readableFromType(section.type)}",
+                                            text = "No nearby ${readableFromType(section.type)}",
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
                                 } else {
-                                    itemsIndexed(
-                                        section.items,
-                                        key = { _, place -> "place-${place.id}" }
-                                    ) { _, place ->
+                                    items(section.items, key = { it.id }) { place ->
                                         val isFav =
                                             favIds.contains(place.id) || transientAdded.contains(place.id)
-                                        val cachedPhoto = photoCache[place.id]
-                                        val isVisible = visiblePlaceIds.contains(place.id)
 
-                                        PlaceCardWithLazyPhoto(
+                                        PlaceCardMinimal(
                                             place = place,
-                                            photo = cachedPhoto,
-                                            client = client,
-                                            isVisible = isVisible,
-                                            onPhotoLoaded = { bmp ->
-                                                photoCache[place.id] = bmp
-                                            },
                                             isFavorited = isFav,
                                             onClick = { onPlaceClick(place) },
                                             onToggleFavorite = {
@@ -349,8 +260,7 @@ fun DiscoverListScreen(
                                                 scope.launch {
                                                     runCatching {
                                                         FavoritesRepositoryFirebase.add(
-                                                            place.title,
-                                                            place.id
+                                                            placeId = place.id
                                                         )
                                                     }
                                                     snackbarHostState.currentSnackbarData?.dismiss()
@@ -407,9 +317,7 @@ private fun FilterBar(
                         onChange(
                             filters.copy(
                                 sort = if (filters.sort == SortOption.NEAREST)
-                                    SortOption.FARTHEST
-                                else
-                                    SortOption.NEAREST
+                                    SortOption.FARTHEST else SortOption.NEAREST
                             )
                         )
                     },
@@ -430,20 +338,18 @@ private fun FilterBar(
                 )
             }
             item {
+                val isMin4Selected = (filters.minRating ?: 0f) >= 4.0f
                 FilterChip(
-                    selected = (filters.minRating ?: 0f) >= 4.0f,
+                    selected = isMin4Selected,
                     onClick = {
                         onChange(
                             filters.copy(
-                                minRating = if ((filters.minRating ?: 0f) >= 4.0f)
-                                    null
-                                else
-                                    4.0f
+                                minRating = if (isMin4Selected) null else 4.0f
                             )
                         )
                     },
                     label = { Text("4.0+") },
-                    colors = chipColors((filters.minRating ?: 0f) >= 4.0f)
+                    colors = chipColors(isMin4Selected)
                 )
             }
             item {
@@ -463,11 +369,10 @@ private fun FilterBar(
 data class UiPlace(
     val id: String,
     val title: String,
-    val photo: Bitmap?,                         // kept for compatibility
+    val photo: Bitmap?,
     val distanceMeters: Int? = null,
     val rating: Float? = null,
-    val isOpenNow: Boolean? = null,
-    val photoMetadata: PhotoMetadata? = null    // used for lazy photo loading
+    val isOpenNow: Boolean? = null
 )
 
 data class UiSection(val type: String, val items: List<UiPlace>)
@@ -489,70 +394,32 @@ val CategoryToTypes: Map<Int, List<String>> = mapOf(
     8 to listOf("post_office", "bank", "atm", "gas_station", "car_repair")
 )
 
-/* --------------------------- Loading with cache + parallelism ------- */
-
-suspend fun loadNearbySectionsWithPhotosDistanceRatingOpenNow(
+private suspend fun loadNearbySectionsWithPhotosDistanceRatingOpenNow(
     client: PlacesClient,
     center: LatLng,
     typesOrdered: List<String>,
     radiusMeters: Int,
     maxResults: Int
 ): List<UiSection> = withContext(Dispatchers.IO) {
-    val key = SectionsCacheKey(
-        latBucket = (center.latitude * 1000).toInt(),
-        lngBucket = (center.longitude * 1000).toInt(),
-        radius = radiusMeters,
-        maxResults = maxResults,
-        typesSignature = if (typesOrdered.isEmpty()) "generic"
-        else typesOrdered.joinToString(",")
-    )
-
-    // 1) Check cache first
-    DiscoverNearbyCache.get(key)?.let { cached ->
-        return@withContext cached
+    if (typesOrdered.isEmpty()) {
+        val generic = searchNearbyOneTypeHydrated(client, center, null, radiusMeters, maxResults)
+        return@withContext listOf(UiSection(type = "places", items = generic))
     }
-
-    // 2) Fetch if not cached (metadata only, no photos)
-    val sections: List<UiSection> = if (typesOrdered.isEmpty()) {
-        val generic = searchNearbyOneTypeHydrated(
-            client = client,
-            center = center,
-            type = null,
-            radiusMeters = radiusMeters,
-            maxResults = maxResults
+    typesOrdered.map { t ->
+        UiSection(
+            type = t,
+            items = searchNearbyOneTypeHydrated(client, center, t, radiusMeters, maxResults)
         )
-        listOf(UiSection(type = "places", items = generic))
-    } else {
-        coroutineScope {
-            typesOrdered.map { t ->
-                async {
-                    val items = searchNearbyOneTypeHydrated(
-                        client = client,
-                        center = center,
-                        type = t,
-                        radiusMeters = radiusMeters,
-                        maxResults = maxResults
-                    )
-                    UiSection(type = t, items = items)
-                }
-            }.awaitAll()
-        }
     }
-
-    // 3) Save to cache
-    DiscoverNearbyCache.put(key, sections)
-    return@withContext sections
 }
 
-/* --------------------------- Search + hydrate (no photos) ---------- */
-
-private suspend fun searchNearbyOneTypeHydrated(
+private fun searchNearbyOneTypeHydrated(
     client: PlacesClient,
     center: LatLng,
     type: String?,
     radiusMeters: Int,
     maxResults: Int
-): List<UiPlace> = withContext(Dispatchers.IO) {
+): List<UiPlace> {
     val bounds = CircularBounds.newInstance(center, radiusMeters.toDouble())
     val nearbyFields = listOf(Place.Field.ID, Place.Field.NAME)
     val nearbyReq = SearchNearbyRequest
@@ -561,115 +428,56 @@ private suspend fun searchNearbyOneTypeHydrated(
         .apply { if (!type.isNullOrBlank()) setIncludedTypes(listOf(type)) }
         .build()
 
-    val nearbyResp = runCatching {
-        Tasks.await(client.searchNearby(nearbyReq))
-    }.getOrNull() ?: return@withContext emptyList()
-
+    val nearbyResp = runCatching { Tasks.await(client.searchNearby(nearbyReq)) }.getOrNull()
+        ?: return emptyList()
     val candidates = nearbyResp.places.orEmpty()
-    if (candidates.isEmpty()) return@withContext emptyList()
 
-    // Hydrate metadata in parallel (ID, title, rating, openNow, photoMetadata)
-    return@withContext coroutineScope {
-        val deferreds = candidates.mapNotNull { p ->
-            val placeId = p.id ?: return@mapNotNull null
-            async(Dispatchers.IO) {
-                val fetched = runCatching {
-                    val req = FetchPlaceRequest.builder(
-                        placeId,
-                        listOf(
-                            Place.Field.ID,
-                            Place.Field.NAME,
-                            Place.Field.PHOTO_METADATAS,
-                            Place.Field.LAT_LNG,
-                            Place.Field.RATING,
-                            Place.Field.OPENING_HOURS
-                        )
-                    ).build()
-                    Tasks.await(client.fetchPlace(req)).place
-                }.getOrNull() ?: return@async null
-
-                val title = fetched.name ?: return@async null
-                val meta: PhotoMetadata? = fetched.photoMetadatas?.firstOrNull()
-
-                val d = fetched.latLng?.let { ll ->
-                    distanceMeters(
-                        center.latitude,
-                        center.longitude,
-                        ll.latitude,
-                        ll.longitude
-                    ).roundToInt()
-                }
-                val rating = fetched.rating?.toFloat()
-                val isOpen = computeIsOpenNow(fetched.openingHours)
-
-                UiPlace(
-                    id = placeId,
-                    title = title,
-                    photo = null,           // no photo yet
-                    distanceMeters = d,
-                    rating = rating,
-                    isOpenNow = isOpen,
-                    photoMetadata = meta
+    return candidates.mapNotNull { p ->
+        val placeId = p.id ?: return@mapNotNull null
+        val fetched = runCatching {
+            val req = FetchPlaceRequest.builder(
+                placeId,
+                listOf(
+                    Place.Field.ID,
+                    Place.Field.NAME,
+                    Place.Field.PHOTO_METADATAS,
+                    Place.Field.LAT_LNG,
+                    Place.Field.RATING,
+                    Place.Field.OPENING_HOURS
                 )
-            }
-        }
+            ).build()
+            Tasks.await(client.fetchPlace(req)).place
+        }.getOrNull() ?: return@mapNotNull null
 
-        deferreds.awaitAll().filterNotNull()
+        val title = fetched.name ?: return@mapNotNull null
+        val meta: PhotoMetadata? = fetched.photoMetadatas?.firstOrNull()
+        val bmp: Bitmap? = if (meta != null) {
+            runCatching {
+                val preq =
+                    FetchPhotoRequest.builder(meta).setMaxWidth(1280).setMaxHeight(720).build()
+                Tasks.await(client.fetchPhoto(preq)).bitmap
+            }.getOrNull()
+        } else null
+
+        val d = fetched.latLng?.let { ll ->
+            distanceMeters(center.latitude, center.longitude, ll.latitude, ll.longitude)
+                .roundToInt()
+        }
+        val rating = fetched.rating?.toFloat()
+        val isOpen = computeIsOpenNow(fetched.openingHours)
+
+        UiPlace(
+            id = placeId,
+            title = title,
+            photo = bmp,
+            distanceMeters = d,
+            rating = rating,
+            isOpenNow = isOpen
+        )
     }
 }
 
-/* --------------------------- Lazy photo loader ---------------------- */
-
-@Composable
-private fun PlaceCardWithLazyPhoto(
-    place: UiPlace,
-    photo: Bitmap?,
-    client: PlacesClient,
-    isVisible: Boolean,
-    onPhotoLoaded: (Bitmap?) -> Unit,
-    isFavorited: Boolean,
-    onClick: () -> Unit,
-    onToggleFavorite: () -> Unit
-) {
-    var localPhoto by remember(place.id) { mutableStateOf(photo) }
-
-    // Only start fetching when the row is actually visible
-    LaunchedEffect(place.id, isVisible) {
-        if (!isVisible) return@LaunchedEffect
-        if (localPhoto == null && place.photoMetadata != null) {
-            // Small delay to avoid flapping when scrolling quickly
-            delay(150)
-            if (!isVisible) return@LaunchedEffect
-
-            val bmp = fetchPhotoBitmap(client, place.photoMetadata)
-            localPhoto = bmp
-            onPhotoLoaded(bmp)
-        }
-    }
-
-    PlaceCardMinimal(
-        place = place,
-        photo = localPhoto,
-        isFavorited = isFavorited,
-        onClick = onClick,
-        onToggleFavorite = onToggleFavorite
-    )
-}
-
-private suspend fun fetchPhotoBitmap(
-    client: PlacesClient,
-    meta: PhotoMetadata
-): Bitmap? = withContext(Dispatchers.IO) {
-    runCatching {
-        val preq = FetchPhotoRequest.builder(meta)
-            .setMaxWidth(PHOTO_MAX_WIDTH)
-            .setMaxHeight(PHOTO_MAX_HEIGHT)
-            .build()
-        Tasks.await(client.fetchPhoto(preq)).bitmap
-    }.getOrNull()
-}
-
-/* --------------------------- Apply filters to section -------------- */
+/* --------------------------- Apply filters to section --------------------------- */
 
 private fun applyFiltersToSection(
     section: UiSection,
@@ -680,7 +488,7 @@ private fun applyFiltersToSection(
 
     if (f.openNow) items = items.filter { it.isOpenNow == true }
     f.minRating?.let { min -> items = items.filter { (it.rating ?: 0f) >= min } }
-    if (f.onlyWithPhoto) items = items.filter { it.photoMetadata != null }
+    if (f.onlyWithPhoto) items = items.filter { it.photo != null }
     if (f.onlyFavorites) items = items.filter { favIds.contains(it.id) }
 
     items = when (f.sort) {
@@ -695,7 +503,6 @@ private fun applyFiltersToSection(
 @Composable
 fun PlaceCardMinimal(
     place: UiPlace,
-    photo: Bitmap? = place.photo, // use passed photo (lazy-loaded), fallback to place.photo
     isFavorited: Boolean,
     onClick: () -> Unit,
     onToggleFavorite: () -> Unit
@@ -712,31 +519,31 @@ fun PlaceCardMinimal(
             .clickable { onClick() },
         shape = RoundedCornerShape(18.dp),
         elevation = CardDefaults.cardElevation(4.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFFDE7)) // very light yellow
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFFDE7))
     ) {
         Column {
-            if (photo != null) {
+            if (place.photo != null) {
                 Image(
-                    bitmap = photo.asImageBitmap(),
+                    bitmap = place.photo.asImageBitmap(),
                     contentDescription = place.title,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(180.dp),
+                        .height(200.dp),
                     contentScale = ContentScale.Crop
                 )
             } else {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(180.dp)
-                        .background(Color(0xFFFFECB3)), // warm placeholder
+                        .height(200.dp)
+                        .background(Color(0xFFFFECB3)),
                     contentAlignment = Alignment.Center
                 ) {
                     Box(
                         modifier = Modifier
                             .size(44.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFFFFE082)) // lighter warm dot
+                            .background(Color(0xFFFFE082))
                     )
                 }
             }
@@ -756,7 +563,7 @@ fun PlaceCardMinimal(
                     )
                     place.distanceMeters?.let {
                         Text(
-                            formatDistance(it),
+                            formatDistanceImperial(it),
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
@@ -769,16 +576,9 @@ fun PlaceCardMinimal(
                     modifier = Modifier.graphicsLayer(scaleX = scale, scaleY = scale)
                 ) {
                     if (isFavorited)
-                        Icon(
-                            Icons.Filled.Favorite,
-                            contentDescription = "Added",
-                            tint = Color.Red
-                        )
+                        Icon(Icons.Filled.Favorite, contentDescription = "Added", tint = Color.Red)
                     else
-                        Icon(
-                            Icons.Outlined.FavoriteBorder,
-                            contentDescription = "Save"
-                        )
+                        Icon(Icons.Outlined.FavoriteBorder, contentDescription = "Save")
                 }
             }
         }
@@ -806,9 +606,10 @@ private fun readableFromType(type: String): String {
         "car_repair" to "Car Repair",
         "tourist_attraction" to "Tourist Attraction"
     )
-    return special[type] ?: type.split('_')
-        .filter { it.isNotBlank() }
-        .joinToString(" ") { it.replaceFirstChar { c -> c.titlecase() } }
+    return special[type]
+        ?: type.split('_')
+            .filter { it.isNotBlank() }
+            .joinToString(" ") { it.replaceFirstChar { c -> c.titlecase() } }
 }
 
 private fun categoryTitle(categoryId: Int): String = when (categoryId) {
@@ -840,9 +641,17 @@ private fun distanceMeters(
     return R * 2 * atan2(sqrt(a), sqrt(1 - a))
 }
 
-private fun formatDistance(m: Int): String =
-    if (m >= 1000) String.format("%.1f km away", m / 1000.0)
-    else "$m m away"
+// 🔹 Distance string in imperial, similar to your Recommendations distance chip
+private fun formatDistanceImperial(m: Int): String {
+    val meters = m.toDouble()
+    return if (meters >= 1609.0) {
+        val miles = ((meters / 1609.34) * 10.0).roundToInt() / 10.0
+        "$miles mi away"
+    } else {
+        val feet = (meters * 3.28084).roundToInt()
+        "$feet ft away"
+    }
+}
 
 /* --------------------------- Open-now computation --------------------------- */
 
@@ -850,7 +659,7 @@ private fun computeIsOpenNow(hours: OpeningHours?): Boolean? {
     val periods: List<Period> = hours?.periods ?: return null
 
     val cal = Calendar.getInstance()
-    val currentIdx = calendarDayToIdx(cal.get(Calendar.DAY_OF_WEEK)) // 0..6 (Mon=0..Sun=6)
+    val currentIdx = calendarDayToIdx(cal.get(Calendar.DAY_OF_WEEK))
     val nowMinutes = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
 
     for (p in periods) {

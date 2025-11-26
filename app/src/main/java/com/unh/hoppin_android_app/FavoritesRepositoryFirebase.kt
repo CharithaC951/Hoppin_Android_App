@@ -35,14 +35,10 @@ object FavoritesRepositoryFirebase {
     }
 
     /** Add one ID (idempotent). */
-    suspend fun add(placeName: String, placeId: String) {
+    suspend fun add(placeId: String) {
         userDoc()
             .set(mapOf(KEY_FAVORITES to FieldValue.arrayUnion(placeId)), SetOptions.merge())
             .await()
-        NotificationRepositoryFirebase.createNotification(
-            title = "New Favorite Added",
-            message = "You have added '$placeName' to your favorites."
-        )
     }
 
     /** Remove one ID (idempotent). */
@@ -52,10 +48,17 @@ object FavoritesRepositoryFirebase {
             .await()
     }
 
-    /** Toggle. */
-    suspend fun toggle(placeName: String,placeId: String) {
-        val before = (userDoc().get().await().get(KEY_FAVORITES) as? List<*>)?.filterIsInstance<String>()?.toSet()
+    /** Toggle favourite state for a given placeId. */
+    suspend fun toggle(placeId: String) {
+        val before = (userDoc().get().await().get(KEY_FAVORITES) as? List<*>)
+            ?.filterIsInstance<String>()
+            ?.toSet()
             ?: emptySet()
-        if (before.contains(placeId)) remove(placeId) else add(placeName,placeId)
+
+        if (before.contains(placeId)) {
+            remove(placeId)
+        } else {
+            add(placeId)
+        }
     }
 }
