@@ -76,7 +76,7 @@ fun ForgotPasswordScreen(
                     .fillMaxSize()
                     .padding(paddingValues)
                     .padding(horizontal = 24.dp),
-                verticalArrangement = Arrangement.Center,
+                //verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 // --- CHANGED: Replaced Text with Logo Image ---
@@ -86,14 +86,14 @@ fun ForgotPasswordScreen(
                     modifier = Modifier.size(width = 200.dp, height = 200.dp)
                 )
 
-                Spacer(modifier = Modifier.height(60.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 // --- CHANGED: Color to White for visibility on dark water ---
                 Text(
                     "Reset your password",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = Color.Black
                 )
                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -102,7 +102,7 @@ fun ForgotPasswordScreen(
                     "Enter your registered email below and we'll send you a link to reset your password.",
                     style = MaterialTheme.typography.bodyMedium,
                     textAlign = TextAlign.Center,
-                    color = Color.White.copy(alpha = 0.9f)
+                    color = Color.Black.copy(alpha = 0.9f)
                 )
                 Spacer(modifier = Modifier.height(32.dp))
 
@@ -132,7 +132,7 @@ fun ForgotPasswordScreen(
                     enabled = !uiState.isLoading,
                     shape = RoundedCornerShape(30.dp),
                     // --- CHANGED: Cyan color to match your Login/Register screens ---
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00BCD4))
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF004D40))
                 ) {
                     if (uiState.isLoading) {
                         CircularProgressIndicator(

@@ -539,12 +539,12 @@ private fun CreateAccountUI(onNavigateBack: () -> Unit) {
                     Text("Create Account", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 }
             }
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.weight(1f))
 
             // Added a background box or improved text color for the terms text
             Box(
                 modifier = Modifier
-                    .background(Color.White, RoundedCornerShape(8.dp))
+                    .background(Color.White, RoundedCornerShape(10.dp))
                     .padding(8.dp)
             ) {
                 TermsAndPrivacyText()
@@ -577,7 +577,7 @@ private fun OrSeparator() {
         )
         Text(
             text = " OR ",
-            color = Color.Black,
+            color = Color.White,
             fontWeight = FontWeight.Bold,
             fontSize = 12.sp
         )
@@ -594,7 +594,7 @@ private fun TermsAndPrivacyText() {
     val annotatedString = buildAnnotatedString {
         withStyle(style = SpanStyle(
             color = Color.Black,       // Change to Color.Black if you have a light background
-            fontWeight = FontWeight.Bold,
+            fontWeight = FontWeight.Normal,
             fontSize = 14.sp
         )) {
             append("By clicking continue, you agree to our ")
@@ -604,7 +604,10 @@ private fun TermsAndPrivacyText() {
             append("Terms of Service")
         }
         pop()
-        append(" and ")
+
+        withStyle(style = SpanStyle(color = Color.Black)) {   // <-- change "and" color
+            append(" and ")
+        }
         pushStringAnnotation(tag = "PRIVACY", annotation = "privacy_policy_url")
         withStyle(style = SpanStyle(fontWeight = FontWeight.Bold, color = Color.Black)) {
             append("Privacy Policy")
