@@ -44,7 +44,6 @@ const val HOME_ROUTE_PATTERN = "Home/{$USER_NAME_ARG}"
 
 class MainActivity : ComponentActivity() {
 
-    // Use your real keys here
     private val PLACES_API_KEY = "AIzaSyDiNZujsy2lzuMOmacqsm4yrcWg2RFqobw"
     private val MAPS_API_KEY = "AIzaSyBZ5BHvRW4P9pLWKwGQh_WiyfMOQKfLONA"
 
@@ -78,7 +77,7 @@ class MainActivity : ComponentActivity() {
                     val context = this@MainActivity
                     val activity = this@MainActivity
 
-                    // 🔹 Create a single PlacesClient we can reuse, including for prefetch
+                    // Shared PlacesClient
                     val placesClient: PlacesClient = remember {
                         Places.createClient(context)
                     }
@@ -88,7 +87,7 @@ class MainActivity : ComponentActivity() {
                         LocationServices.getFusedLocationProviderClient(context)
                     }
 
-                    // Our visit tracking engine (handles dwell, nearby places, rewards)
+                    // Visit tracker
                     val visitTracker = remember {
                         VisitTracker(
                             context = context,
@@ -98,18 +97,20 @@ class MainActivity : ComponentActivity() {
 
                     var deviceCenter by remember { mutableStateOf<LatLng?>(null) }
 
-                    // 🔹 One-time flag to avoid prefetching multiple times
+                    // One-time prefetch guard
                     var hasPrefetched by remember { mutableStateOf(false) }
 
                     fun maybePrefetchForCenter(center: LatLng) {
                         if (hasPrefetched) return
                         hasPrefetched = true
                         activity.lifecycleScope.launch {
-                            runCatching {
+                            try {
                                 prefetchNearbyForCenter(
                                     client = placesClient,
                                     center = center
                                 )
+                            } catch (_: Exception) {
+                                // ignore prefetch errors
                             }
                         }
                     }
@@ -121,7 +122,6 @@ class MainActivity : ComponentActivity() {
                             granted[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
                                     granted[Manifest.permission.ACCESS_COARSE_LOCATION] == true
                         if (allowed) {
-                            // ✅ Start visit tracking once permission is granted
                             visitTracker.start()
 
                             val token = CancellationTokenSource()
@@ -132,7 +132,6 @@ class MainActivity : ComponentActivity() {
                                 if (loc != null) {
                                     val center = LatLng(loc.latitude, loc.longitude)
                                     deviceCenter = center
-                                    // 🔹 Prefetch once we know location
                                     maybePrefetchForCenter(center)
                                 } else {
                                     fused.lastLocation.addOnSuccessListener { last ->
@@ -150,7 +149,6 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    // 🔹 LaunchedEffect to request permission & start tracker / location
                     LaunchedEffect(Unit) {
                         val fine = ActivityCompat.checkSelfPermission(
                             context,
@@ -164,7 +162,6 @@ class MainActivity : ComponentActivity() {
                                 coarse == PackageManager.PERMISSION_GRANTED
 
                         if (granted) {
-                            // ✅ Permission already granted → start tracker & fetch location
                             visitTracker.start()
 
                             val token = CancellationTokenSource()
@@ -199,7 +196,6 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    // 🔹 Ensure VisitTracker stops when the composition is torn down
                     DisposableEffect(Unit) {
                         onDispose {
                             visitTracker.stop()
@@ -302,7 +298,7 @@ class MainActivity : ComponentActivity() {
                                             .filter { it.isNotBlank() },
                                         selectedCategoryId = categoryId.takeIf { it != -1 },
                                         center = deviceCenter,
-                                        placesClient = placesClient, // use same client
+                                        placesClient = placesClient,
                                         onBack = { navController.popBackStack() },
                                         onPlaceClick = { uiPlace ->
                                             navController.navigate("place/${uiPlace.id}")
@@ -381,9 +377,7 @@ class MainActivity : ComponentActivity() {
                                     "itinerary/{itineraryId}",
                                     arguments = listOf(navArgument("itineraryId") { type = NavType.StringType })
                                 ) { backStackEntry ->
-
                                     val itineraryId = backStackEntry.arguments?.getString("itineraryId") ?: ""
-
                                     ItineraryDetailScreen(
                                         itineraryId = itineraryId,
                                         onBack = { navController.popBackStack() },
@@ -477,7 +471,7 @@ class MainActivity : ComponentActivity() {
                                         .filter { it.isNotBlank() },
                                     selectedCategoryId = categoryId.takeIf { it != -1 },
                                     center = deviceCenter,
-                                    placesClient = placesClient, // same client
+                                    placesClient = placesClient,
                                     onBack = { navController.popBackStack() },
                                     onPlaceClick = { uiPlace ->
                                         navController.navigate("place/${uiPlace.id}")
@@ -555,9 +549,7 @@ class MainActivity : ComponentActivity() {
                                 "itinerary/{itineraryId}",
                                 arguments = listOf(navArgument("itineraryId") { type = NavType.StringType })
                             ) { backStackEntry ->
-
                                 val itineraryId = backStackEntry.arguments?.getString("itineraryId") ?: ""
-
                                 ItineraryDetailScreen(
                                     itineraryId = itineraryId,
                                     onBack = { navController.popBackStack() },
@@ -573,12 +565,17 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // No-op prefetch to satisfy reference; safe to extend later if you want real prefetching.
+    private fun prefetchNearbyForCenter(client: PlacesClient, center: LatLng) {
+        // Intentionally left blank
+    }
+
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val name = "Hoppin App Notifications"
             val descriptionText = "Channel for general app notifications"
             val importance = NotificationManager.IMPORTANCE_DEFAULT
-            val channel = NotificationChannel(HOPPIN_CHANNEL_ID, name, importance).apply {
+            val channel = NotificationChannel("HOPPIN_CHANNEL_ID", name, importance).apply {
                 description = descriptionText
             }
             val notificationManager: NotificationManager =

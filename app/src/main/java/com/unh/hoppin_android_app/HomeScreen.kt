@@ -82,7 +82,7 @@ fun HomeScreen(
  * The main Home screen content.
  *
  * Responsibilities:
- *  - Request and display device location (with fallback to a default)
+ *  - Request and display device location
  *  - Show a top greeting row with profile and quick map action
  *  - Render category row and recommendations block
  *  - Display a floating chat action button
@@ -120,7 +120,7 @@ private fun HomeScreenContent(
      *  - Attempts getCurrentLocation()
      *  - Falls back to lastLocation or a single accurate location fix if needed
      *  - Reverse-geocodes to a street/city string for display
-     *  - On failure, provides a sane New Haven fallback
+     *  - On failure, we do NOT use any hardcoded fallback; we just show "Unavailable"/"Locating..."
      */
     LaunchedEffect(hasLocationPermission) {
         if (!hasLocationPermission) return@LaunchedEffect
@@ -142,24 +142,26 @@ private fun HomeScreenContent(
             }
 
             if (latLng == null) {
+                // ❌ No GPS fix — don't force any default city
                 locationError = "Location unavailable"
-                deviceLatLng = LatLng(41.3083, -72.9279) // New Haven fallback
-                streetCity = "New Haven"
+                deviceLatLng = null
+                streetCity = null
             } else {
-                // Got a location: keep it and attempt reverse-geocoding
+                // ✅ Got a location: keep it and attempt reverse-geocoding
                 deviceLatLng = latLng
                 streetCity = reverseGeocodeStreetCity(context, latLng) ?: "Locating..."
+                locationError = null
             }
         } catch (e: SecurityException) {
             // Permission missing or revoked while running
             locationError = "Location permission not granted"
-            deviceLatLng = LatLng(41.3083, -72.9279)
-            streetCity = "New Haven"
+            deviceLatLng = null
+            streetCity = null
         } catch (e: Exception) {
             // Generic failure (network, geocoder, etc.)
             locationError = "Location error"
-            deviceLatLng = LatLng(41.3083, -72.9279)
-            streetCity = "New Haven"
+            deviceLatLng = null
+            streetCity = null
         } finally {
             loading = false
         }
@@ -339,10 +341,12 @@ private fun rememberLocationPermissionState(): State<Boolean> {
             ctx, Manifest.permission.ACCESS_COARSE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
         if (fine || coarse) granted = true
-        else launcher.launch(arrayOf(
-            Manifest.permission.ACCESS_FINE_LOCATION,
-            Manifest.permission.ACCESS_COARSE_LOCATION
-        ))
+        else launcher.launch(
+            arrayOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            )
+        )
     }
     return remember { derivedStateOf { granted } }
 }
