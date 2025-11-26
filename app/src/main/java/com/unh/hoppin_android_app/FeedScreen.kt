@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.*
@@ -38,8 +39,21 @@ fun FeedScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Community Feed") },
+            CenterAlignedTopAppBar(
+                title = {
+                    Column {
+                        Text(
+                            text = "Community Feed",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = "Trips & reviews from Hoppin users",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
@@ -56,7 +70,15 @@ fun FeedScreen(
                     .padding(innerPadding),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator()
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator()
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        "Loading community feed…",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
 
             uiState.error != null -> Box(
@@ -65,10 +87,35 @@ fun FeedScreen(
                     .padding(innerPadding),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = uiState.error ?: "Something went wrong",
-                    color = MaterialTheme.colorScheme.error
-                )
+                ElevatedCard(
+                    shape = RoundedCornerShape(20.dp),
+                    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 6.dp),
+                    modifier = Modifier
+                        .padding(24.dp)
+                        .fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "Unable to load feed",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = uiState.error ?: "Something went wrong",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Button(onClick = { vm.refresh() }) {
+                            Text("Retry")
+                        }
+                    }
+                }
             }
 
             else -> {
@@ -82,18 +129,49 @@ fun FeedScreen(
                 ) {
                     // -------------------- Header --------------------
                     item {
-                        Text(
-                            text = "Discover Trips from the Community",
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            text = "See what others are exploring and read their latest reviews.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(Modifier.height(8.dp))
+                        Column {
+                            Text(
+                                text = "Discover Trips from the Community",
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = "See what others are exploring nearby and get inspired for your next outing.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+
+                            val tripCount = uiState.itineraries.size
+                            val reviewCount = uiState.reviews.size
+                            if (tripCount > 0 || reviewCount > 0) {
+                                Spacer(Modifier.height(8.dp))
+                                Text(
+                                    text = buildString {
+                                        append("Community activity: ")
+                                        append("$tripCount shared trip")
+                                        if (tripCount != 1) append("s")
+                                        append(" · ")
+                                        append("$reviewCount review")
+                                        if (reviewCount != 1) append("s")
+                                    },
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+
+                            Spacer(Modifier.height(12.dp))
+                        }
+                    }
+
+                    // -------------------- Shared itineraries section label --------------------
+                    if (uiState.itineraries.isNotEmpty()) {
+                        item {
+                            SectionHeader(
+                                title = "Shared Trips",
+                                subtitle = "Curated itineraries from the Hoppin community"
+                            )
+                        }
                     }
 
                     // -------------------- Shared itineraries --------------------
@@ -111,53 +189,31 @@ fun FeedScreen(
 
                     if (uiState.itineraries.isEmpty()) {
                         item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 32.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    "No shared trips yet.\nShare one of your itineraries to see it here!",
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                            }
+                            EmptyStateCard(
+                                title = "No shared trips yet",
+                                message = "Share one of your itineraries so others can discover your favorite spots."
+                            )
                         }
                     }
 
                     // -------------------- All reviews section --------------------
                     item {
-                        Spacer(Modifier.height(12.dp))
-                        Divider()
-                        Spacer(Modifier.height(12.dp))
-
-                        Text(
-                            text = "All community reviews",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            text = "Latest reviews from Hoppin users across all places.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
                         Spacer(Modifier.height(8.dp))
+                        Divider()
+                        Spacer(Modifier.height(16.dp))
+
+                        SectionHeader(
+                            title = "All Community Reviews",
+                            subtitle = "Latest reviews across all places in Hoppin"
+                        )
                     }
 
                     if (uiState.reviews.isEmpty()) {
                         item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 8.dp, bottom = 32.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    "No reviews yet.\nStart by reviewing a place you visited!",
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                            }
+                            EmptyStateCard(
+                                title = "No reviews yet",
+                                message = "Start by reviewing a place you visited and help others decide where to go."
+                            )
                         }
                     } else {
                         items(uiState.reviews, key = { it.id }) { review ->
@@ -170,48 +226,125 @@ fun FeedScreen(
     }
 }
 
+/* -------------------- Small UI helpers -------------------- */
+
+@Composable
+private fun SectionHeader(
+    title: String,
+    subtitle: String
+) {
+    Column {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.SemiBold
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
+            text = subtitle,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun EmptyStateCard(
+    title: String,
+    message: String
+) {
+    ElevatedCard(
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 3.dp),
+        shape = RoundedCornerShape(20.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+        }
+    }
+}
+
+/* -------------------- Cards -------------------- */
+
 @Composable
 private fun SharedItineraryCard(
     itinerary: SharedItinerary,
     reviews: List<CommonReview>,
     onOpen: () -> Unit
 ) {
-    Surface(
+    ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
-        tonalElevation = 3.dp,
-        shadowElevation = 3.dp,
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 4.dp),
         onClick = onOpen
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             // Header: name + meta
-            Text(
-                text = itinerary.name.ifBlank { "Untitled Trip" },
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-
-            Spacer(Modifier.height(4.dp))
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                val placeCount = itinerary.placeIds.size
-                Text(
-                    text = "$placeCount place" + if (placeCount == 1) "" else "s",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                itinerary.createdAt?.let { ts ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.weight(1f)) {
                     Text(
-                        text = " • " + formatShortDate(ts.toDate()),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = itinerary.name.ifBlank { "Untitled Trip" },
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
+
+                    Spacer(Modifier.height(4.dp))
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        val placeCount = itinerary.placeIds.size
+                        Text(
+                            text = "$placeCount place" + if (placeCount == 1) "" else "s",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        itinerary.createdAt?.let { ts ->
+                            Text(
+                                text = " • " + formatShortDate(ts.toDate()),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 }
+
+                AssistChip(
+                    onClick = onOpen,
+                    label = { Text("View trip") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Filled.ArrowForward,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                )
             }
 
             if (itinerary.description.isNotBlank()) {
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(8.dp))
                 Text(
                     text = itinerary.description,
                     style = MaterialTheme.typography.bodyMedium,
@@ -220,7 +353,7 @@ private fun SharedItineraryCard(
                 )
             }
 
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(12.dp))
 
             Divider()
 
@@ -241,9 +374,17 @@ private fun SharedItineraryCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             } else {
-                reviews.forEach { review ->
+                reviews.forEachIndexed { index, review ->
                     ReviewSnippetRow(review = review)
-                    Spacer(Modifier.height(6.dp))
+                    if (index != reviews.lastIndex) {
+                        Spacer(Modifier.height(6.dp))
+                        Divider(
+                            modifier = Modifier.padding(vertical = 4.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                        )
+                    } else {
+                        Spacer(Modifier.height(6.dp))
+                    }
                 }
             }
         }
@@ -252,17 +393,18 @@ private fun SharedItineraryCard(
 
 @Composable
 private fun ReviewFeedCard(review: CommonReview) {
-    Surface(
+    ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        tonalElevation = 2.dp,
-        shadowElevation = 2.dp
+        shape = RoundedCornerShape(18.dp),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 3.dp)
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
+        Column(modifier = Modifier.padding(14.dp)) {
             ReviewSnippetRow(review = review)
         }
     }
 }
+
+/* -------------------- Review snippet -------------------- */
 
 @Composable
 private fun ReviewSnippetRow(review: CommonReview) {
@@ -294,13 +436,15 @@ private fun ReviewSnippetRow(review: CommonReview) {
                 Text(
                     text = "• " + review.placeName,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
 
         if (review.text.isNotBlank()) {
-            Spacer(Modifier.height(2.dp))
+            Spacer(Modifier.height(4.dp))
             Text(
                 text = review.text,
                 style = MaterialTheme.typography.bodySmall,
@@ -310,7 +454,7 @@ private fun ReviewSnippetRow(review: CommonReview) {
         }
 
         review.createdAt?.toDate()?.let { date ->
-            Spacer(Modifier.height(2.dp))
+            Spacer(Modifier.height(4.dp))
             Text(
                 text = formatShortDateTime(date),
                 style = MaterialTheme.typography.labelSmall,
@@ -319,6 +463,8 @@ private fun ReviewSnippetRow(review: CommonReview) {
         }
     }
 }
+
+/* -------------------- Date helpers -------------------- */
 
 private fun formatShortDate(date: Date): String {
     val fmt = SimpleDateFormat("MMM d", Locale.getDefault())

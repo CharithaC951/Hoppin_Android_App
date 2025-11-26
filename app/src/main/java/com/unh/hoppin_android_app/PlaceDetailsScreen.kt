@@ -51,6 +51,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import com.google.firebase.auth.ktx.auth
 import com.unh.hoppin_android_app.viewmodels.TripItinerariesViewModel
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /* ------------------------ Editorial helpers ------------------------ */
 
@@ -338,8 +341,16 @@ fun PlaceDetailsScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(name ?: "Place details") },
+            CenterAlignedTopAppBar(
+                title = {
+                    Column {
+                        Text(
+                            text = name ?: "Place details",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
@@ -355,18 +366,56 @@ fun PlaceDetailsScreen(
                     .fillMaxSize()
                     .padding(inner),
                 contentAlignment = Alignment.Center
-            ) { CircularProgressIndicator() }
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator()
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        "Loading place details…",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
 
             error != null -> Box(
                 Modifier
                     .fillMaxSize()
                     .padding(inner),
                 contentAlignment = Alignment.Center
-            ) { Text(error ?: "Unknown error", color = MaterialTheme.colorScheme.error) }
+            ) {
+                ElevatedCard(
+                    shape = RoundedCornerShape(20.dp),
+                    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 6.dp),
+                    modifier = Modifier
+                        .padding(24.dp)
+                        .fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "Unable to load place",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = error ?: "Unknown error",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
+                }
+            }
 
             else -> {
                 Column(
                     modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.surface)
                         .verticalScroll(rememberScrollState())
                         .padding(inner)
                 ) {
@@ -421,212 +470,273 @@ fun PlaceDetailsScreen(
 
                     Spacer(Modifier.height(16.dp))
 
-                    // Title + rating + address
-                    Column(Modifier.padding(horizontal = 16.dp)) {
-                        Text(name.orEmpty(), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.height(6.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            rating?.let { r ->
-                                Text("⭐ ${"%.1f".format(r)}", style = MaterialTheme.typography.bodyMedium)
-                                ratingsTotal?.let { t -> Text("  ·  $t reviews", style = MaterialTheme.typography.bodyMedium) }
-                            } ?: Text("No rating", style = MaterialTheme.typography.bodyMedium)
-                        }
-                        address?.let {
-                            Spacer(Modifier.height(8.dp))
-                            Text(it, style = MaterialTheme.typography.bodyMedium)
-                        }
-                    }
-
-                    Spacer(Modifier.height(16.dp))
-
-                    /* ---------------- Uniform actions in a LazyRow ---------------- */
-                    val shape = RoundedCornerShape(14.dp)
-
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
+                    /* ------------------------ Info card ------------------------ */
+                    ElevatedCard(
+                        modifier = Modifier
+                            .padding(horizontal = 16.dp)
+                            .fillMaxWidth(),
+                        shape = RoundedCornerShape(20.dp),
+                        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 4.dp)
                     ) {
-                        // --- Add / Remove Trip button (TOGGLE) ---
-                        item {
-                            FilledTonalButton(
-                                onClick = {
-                                    if (isInAnyTrip) {
-                                        // Remove this place from all itineraries where it appears
-                                        val affected = itineraries.filter { it.placeIds.contains(placeId) }
-                                        affected.forEach { trip ->
-                                            tripVm.removePlaceFromItinerary(trip.id, placeId)
-                                        }
-                                        scope.launch {
-                                            snackbarHostState.showSnackbar("Removed from trip itineraries")
-                                        }
-                                    } else {
-                                        // Not in any trip yet → open picker dialog
-                                        showTripDialog = true
+                        Column(Modifier.padding(16.dp)) {
+                            Text(
+                                name.orEmpty(),
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(Modifier.height(8.dp))
+
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                rating?.let { r ->
+                                    Text(
+                                        "⭐ ${"%.1f".format(r)}",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    ratingsTotal?.let { t ->
+                                        Text(
+                                            "  ·  $t reviews",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
                                     }
-                                },
-                                shape = shape
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.Star,
-                                    contentDescription = if (isInAnyTrip) "Remove from trips" else "Add to trip itinerary"
+                                } ?: Text(
+                                    "No rating yet",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                                Spacer(Modifier.width(6.dp))
+                            }
+
+                            address?.let {
+                                Spacer(Modifier.height(8.dp))
                                 Text(
-                                    text = if (isInAnyTrip) "Remove from Trips" else "Add to Trip"
+                                    it,
+                                    style = MaterialTheme.typography.bodyMedium
                                 )
                             }
-                        }
 
-                        // Share
-                        item {
-                            FilledTonalButton(
-                                onClick = {
-                                    val ll = latLng
-                                    val gmaps = if (ll != null) {
-                                        "https://www.google.com/maps/search/?api=1&query=${ll.latitude},${ll.longitude}&query_place_id=$placeId"
-                                    } else {
-                                        "https://www.google.com/maps/search/?api=1&query=${Uri.encode(name ?: address ?: "")}"
-                                    }
-                                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                                        type = "text/plain"
-                                        putExtra(Intent.EXTRA_SUBJECT, name ?: "Place")
-                                        putExtra(Intent.EXTRA_TEXT, "${name ?: ""}\n$gmaps")
-                                    }
-                                    startActivity(ctx, Intent.createChooser(shareIntent, "Share place"), null)
-                                },
-                                shape = shape
-                            ) {
-                                Icon(Icons.Filled.Share, contentDescription = "Share")
-                                Spacer(Modifier.width(6.dp))
-                                Text("Share")
-                            }
-                        }
-
-                        // Call
-                        item {
-                            FilledTonalButton(
-                                onClick = {
-                                    phone?.let { tel ->
-                                        val intent = Intent(Intent.ACTION_DIAL).apply { data = Uri.parse("tel:$tel") }
-                                        startActivity(ctx, intent, null)
-                                    }
-                                },
-                                enabled = phone != null,
-                                shape = shape
-                            ) {
-                                Icon(Icons.Filled.Phone, contentDescription = "Call")
-                                Spacer(Modifier.width(6.dp))
-                                Text("Call")
-                            }
-                        }
-
-                        // Website
-                        item {
-                            FilledTonalButton(
-                                onClick = {
-                                    website?.let { uri ->
-                                        val intent = Intent(Intent.ACTION_VIEW, uri)
-                                        startActivity(ctx, intent, null)
-                                    }
-                                },
-                                enabled = website != null,
-                                shape = shape
-                            ) {
-                                Icon(Icons.Filled.Language, contentDescription = "Website")
-                                Spacer(Modifier.width(6.dp))
-                                Text("Website")
-                            }
-                        }
-
-                        // Directions
-                        item {
-                            FilledTonalButton(
-                                onClick = {
-                                    latLng?.let { ll ->
-                                        val gmm = Uri.parse("geo:${ll.latitude},${ll.longitude}?q=${Uri.encode(name ?: "")}")
-                                        val intent = Intent(Intent.ACTION_VIEW, gmm)
-                                        startActivity(ctx, intent, null)
-                                    }
-                                },
-                                enabled = latLng != null,
-                                shape = shape
-                            ) {
-                                Icon(Icons.Filled.Directions, contentDescription = "Directions")
-                                Spacer(Modifier.width(6.dp))
-                                Text("Directions")
+                            openingNow?.let { open ->
+                                Spacer(Modifier.height(10.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(999.dp),
+                                    tonalElevation = 1.dp
+                                ) {
+                                    val text = if (open) "Open now" else "Closed now"
+                                    val color = if (open) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                                    Text(
+                                        text = text,
+                                        color = color,
+                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                                        style = MaterialTheme.typography.labelMedium
+                                    )
+                                }
                             }
                         }
                     }
 
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(20.dp))
+
+                    /* ---------------- Uniform actions in a card ---------------- */
+                    Column(Modifier.padding(horizontal = 16.dp)) {
+                        Text(
+                            text = "Quick actions",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(Modifier.height(8.dp))
+
+                        ElevatedCard(
+                            shape = RoundedCornerShape(18.dp),
+                            elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            val shape = RoundedCornerShape(14.dp)
+
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                // --- Add / Remove Trip button (TOGGLE) ---
+                                item {
+                                    FilledTonalButton(
+                                        onClick = {
+                                            if (isInAnyTrip) {
+                                                // Remove this place from all itineraries where it appears
+                                                val affected = itineraries.filter { it.placeIds.contains(placeId) }
+                                                affected.forEach { trip ->
+                                                    tripVm.removePlaceFromItinerary(trip.id, placeId)
+                                                }
+                                                scope.launch {
+                                                    snackbarHostState.showSnackbar("Removed from trip itineraries")
+                                                }
+                                            } else {
+                                                // Not in any trip yet → open picker dialog
+                                                showTripDialog = true
+                                            }
+                                        },
+                                        shape = shape
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Star,
+                                            contentDescription = if (isInAnyTrip) "Remove from trips" else "Add to trip itinerary"
+                                        )
+                                        Spacer(Modifier.width(6.dp))
+                                        Text(
+                                            text = if (isInAnyTrip) "In Trips" else "Add to Trip"
+                                        )
+                                    }
+                                }
+
+                                // Share
+                                item {
+                                    FilledTonalButton(
+                                        onClick = {
+                                            val ll = latLng
+                                            val gmaps = if (ll != null) {
+                                                "https://www.google.com/maps/search/?api=1&query=${ll.latitude},${ll.longitude}&query_place_id=$placeId"
+                                            } else {
+                                                "https://www.google.com/maps/search/?api=1&query=${Uri.encode(name ?: address ?: "")}"
+                                            }
+                                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                                type = "text/plain"
+                                                putExtra(Intent.EXTRA_SUBJECT, name ?: "Place")
+                                                putExtra(Intent.EXTRA_TEXT, "${name ?: ""}\n$gmaps")
+                                            }
+                                            startActivity(ctx, Intent.createChooser(shareIntent, "Share place"), null)
+                                        },
+                                        shape = shape
+                                    ) {
+                                        Icon(Icons.Filled.Share, contentDescription = "Share")
+                                        Spacer(Modifier.width(6.dp))
+                                        Text("Share")
+                                    }
+                                }
+
+                                // Call
+                                item {
+                                    FilledTonalButton(
+                                        onClick = {
+                                            phone?.let { tel ->
+                                                val intent = Intent(Intent.ACTION_DIAL).apply { data = Uri.parse("tel:$tel") }
+                                                startActivity(ctx, intent, null)
+                                            }
+                                        },
+                                        enabled = phone != null,
+                                        shape = shape
+                                    ) {
+                                        Icon(Icons.Filled.Phone, contentDescription = "Call")
+                                        Spacer(Modifier.width(6.dp))
+                                        Text("Call")
+                                    }
+                                }
+
+                                // Website
+                                item {
+                                    FilledTonalButton(
+                                        onClick = {
+                                            website?.let { uri ->
+                                                val intent = Intent(Intent.ACTION_VIEW, uri)
+                                                startActivity(ctx, intent, null)
+                                            }
+                                        },
+                                        enabled = website != null,
+                                        shape = shape
+                                    ) {
+                                        Icon(Icons.Filled.Language, contentDescription = "Website")
+                                        Spacer(Modifier.width(6.dp))
+                                        Text("Website")
+                                    }
+                                }
+
+                                // Directions
+                                item {
+                                    FilledTonalButton(
+                                        onClick = {
+                                            latLng?.let { ll ->
+                                                val gmm = Uri.parse("geo:${ll.latitude},${ll.longitude}?q=${Uri.encode(name ?: "")}")
+                                                val intent = Intent(Intent.ACTION_VIEW, gmm)
+                                                startActivity(ctx, intent, null)
+                                            }
+                                        },
+                                        enabled = latLng != null,
+                                        shape = shape
+                                    ) {
+                                        Icon(Icons.Filled.Directions, contentDescription = "Directions")
+                                        Spacer(Modifier.width(6.dp))
+                                        Text("Directions")
+                                    }
+                                }
+                            }
+                        }
+                    }
 
                     /* ----------------------------- About ----------------------------- */
+                    Spacer(Modifier.height(20.dp))
                     Column(Modifier.padding(horizontal = 16.dp)) {
-                        Text("About", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                        Spacer(Modifier.height(8.dp))
                         Text(
-                            text = editorial ?: "No description available.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface
+                            "About",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
                         )
+                        Spacer(Modifier.height(8.dp))
+                        ElevatedCard(
+                            shape = RoundedCornerShape(18.dp),
+                            elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = editorial ?: "No description available.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.padding(14.dp)
+                            )
+                        }
                     }
 
                     /* ---------------------------- Trip Card (navigate) ---------------------------- */
-                    Spacer(Modifier.height(24.dp))
+                    Spacer(Modifier.height(20.dp))
                     Column(Modifier.padding(horizontal = 16.dp)) {
-                        Text("Trip Card", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "Trip Card",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
                         Spacer(Modifier.height(8.dp))
-                        FilledTonalButton(
-                            onClick = { onOpenTripCard(name.orEmpty()) },
-                            shape = RoundedCornerShape(14.dp),
+                        ElevatedCard(
+                            shape = RoundedCornerShape(18.dp),
+                            elevation = CardDefaults.elevatedCardElevation(defaultElevation = 3.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Icon(Icons.Filled.Share, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
-                            Text("Create Trip Card")
-                        }
-                    }
-
-                    /* --------------------------- Open now chip --------------------------- */
-                    openingNow?.let { open ->
-                        Spacer(Modifier.height(16.dp))
-                        Surface(
-                            modifier = Modifier
-                                .padding(horizontal = 16.dp)
-                                .fillMaxWidth(),
-                            shape = RoundedCornerShape(14.dp),
-                            tonalElevation = 1.dp
-                        ) {
-                            val text = if (open) "Open now" else "Closed now"
-                            val color = if (open) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-                            Text(
-                                text = text,
-                                color = color,
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
-                            )
+                            FilledTonalButton(
+                                onClick = { onOpenTripCard(name.orEmpty()) },
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp)
+                            ) {
+                                Icon(Icons.Filled.Share, contentDescription = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Create Trip Card")
+                            }
                         }
                     }
 
                     /* ------------------------- Top Reviews (Firestore) ------------------------ */
                     Spacer(Modifier.height(24.dp))
-                    Text(
-                        text = "Top Reviews",
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(horizontal = 16.dp)
-                    )
-                    Spacer(Modifier.height(12.dp))
+                    Column(Modifier.padding(horizontal = 16.dp)) {
+                        Text(
+                            text = "Top Reviews",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(Modifier.height(8.dp))
 
-                    Column(
-                        modifier = Modifier
-                            .padding(horizontal = 16.dp)
-                            .fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
                         if (reviews.isEmpty()) {
                             ElevatedCard(
                                 elevation = CardDefaults.elevatedCardElevation(defaultElevation = 4.dp),
                                 shape = RoundedCornerShape(16.dp),
+                                modifier = Modifier.fillMaxWidth()
                             ) {
                                 Column(Modifier.padding(14.dp)) {
                                     Text(
@@ -637,37 +747,42 @@ fun PlaceDetailsScreen(
                                 }
                             }
                         } else {
-                            reviews.forEach { r ->
-                                ElevatedCard(
-                                    shape = RoundedCornerShape(16.dp),
-                                    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 6.dp),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Column(Modifier.padding(14.dp)) {
-                                        Row {
-                                            (1..5).forEach { i ->
-                                                Icon(
-                                                    imageVector = if (i <= r.rating) Icons.Filled.Star else Icons.Outlined.StarBorder,
-                                                    contentDescription = null
-                                                )
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                reviews.forEach { r ->
+                                    ElevatedCard(
+                                        shape = RoundedCornerShape(16.dp),
+                                        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 3.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Column(Modifier.padding(14.dp)) {
+                                            Row {
+                                                (1..5).forEach { i ->
+                                                    Icon(
+                                                        imageVector = if (i <= r.rating) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                                                        contentDescription = null
+                                                    )
+                                                }
                                             }
+                                            Spacer(Modifier.height(6.dp))
+                                            Text(
+                                                text = r.author.ifBlank { "Anonymous" },
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                            Spacer(Modifier.height(2.dp))
+                                            if (r.text.isNotBlank()) {
+                                                Text(r.text, style = MaterialTheme.typography.bodyMedium)
+                                                Spacer(Modifier.height(4.dp))
+                                            }
+                                            Text(
+                                                formatShortDateTime(r.createdAt.toDate()),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
                                         }
-                                        Spacer(Modifier.height(6.dp))
-                                        Text(
-                                            text = r.author.ifBlank { "Anonymous" },
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.SemiBold
-                                        )
-                                        Spacer(Modifier.height(2.dp))
-                                        if (r.text.isNotBlank()) {
-                                            Text(r.text, style = MaterialTheme.typography.bodyMedium)
-                                            Spacer(Modifier.height(4.dp))
-                                        }
-                                        Text(
-                                            r.createdAt.toDate().toString(), // format as needed
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
                                     }
                                 }
                             }
@@ -676,62 +791,62 @@ fun PlaceDetailsScreen(
 
                     /* ---------------------- Write a review (editor card) -------------------- */
                     Spacer(Modifier.height(24.dp))
-                    Text(
-                        text = "Write a review",
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(horizontal = 16.dp)
-                    )
-                    Spacer(Modifier.height(8.dp))
+                    Column(Modifier.padding(horizontal = 16.dp)) {
+                        Text(
+                            text = "Write a review",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(Modifier.height(8.dp))
 
-                    ElevatedCard(
-                        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 6.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        modifier = Modifier
-                            .padding(horizontal = 16.dp)
-                            .fillMaxWidth()
-                    ) {
-                        Column(Modifier.padding(14.dp)) {
-                            OutlinedTextField(
-                                value = yourName,
-                                onValueChange = { yourName = it },
-                                modifier = Modifier.fillMaxWidth(),
-                                label = { Text("Your name (optional)") },
-                                singleLine = true
-                            )
+                        ElevatedCard(
+                            elevation = CardDefaults.elevatedCardElevation(defaultElevation = 6.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(Modifier.padding(14.dp)) {
+                                OutlinedTextField(
+                                    value = yourName,
+                                    onValueChange = { yourName = it },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    label = { Text("Your name (optional)") },
+                                    singleLine = true
+                                )
 
-                            Spacer(Modifier.height(10.dp))
+                                Spacer(Modifier.height(10.dp))
 
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                (1..5).forEach { i ->
-                                    IconButton(onClick = { myRating = i }) {
-                                        Icon(
-                                            imageVector = if (i <= myRating) Icons.Filled.Star else Icons.Outlined.StarBorder,
-                                            contentDescription = "Rate $i"
-                                        )
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    (1..5).forEach { i ->
+                                        IconButton(onClick = { myRating = i }) {
+                                            Icon(
+                                                imageVector = if (i <= myRating) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                                                contentDescription = "Rate $i"
+                                            )
+                                        }
                                     }
                                 }
-                            }
 
-                            Spacer(Modifier.height(8.dp))
+                                Spacer(Modifier.height(8.dp))
 
-                            OutlinedTextField(
-                                value = myReviewText,
-                                onValueChange = { myReviewText = it },
-                                modifier = Modifier.fillMaxWidth(),
-                                label = { Text("Add your comment") },
-                                placeholder = { Text("What did you like? Any tips for others?") },
-                                minLines = 3,
-                                maxLines = 6
-                            )
+                                OutlinedTextField(
+                                    value = myReviewText,
+                                    onValueChange = { myReviewText = it },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    label = { Text("Add your comment") },
+                                    placeholder = { Text("What did you like? Any tips for others?") },
+                                    minLines = 3,
+                                    maxLines = 6
+                                )
 
-                            Spacer(Modifier.height(10.dp))
+                                Spacer(Modifier.height(10.dp))
 
-                            Button(
-                                onClick = { postReview(name ?: "this place") },
-                                enabled = !mySubmitting && myRating in 1..5 && myReviewText.isNotBlank(),
-                                modifier = Modifier.align(Alignment.End)
-                            ) {
-                                Text(if (mySubmitting) "Posting…" else "Post")
+                                Button(
+                                    onClick = { postReview(name ?: "this place") },
+                                    enabled = !mySubmitting && myRating in 1..5 && myReviewText.isNotBlank(),
+                                    modifier = Modifier.align(Alignment.End)
+                                ) {
+                                    Text(if (mySubmitting) "Posting…" else "Post")
+                                }
                             }
                         }
                     }
@@ -784,4 +899,11 @@ fun PlaceDetailsScreen(
             }
         )
     }
+}
+
+/* ---------------------- Date helper ---------------------- */
+
+private fun formatShortDateTime(date: Date): String {
+    val fmt = SimpleDateFormat("MMM d • h:mm a", Locale.getDefault())
+    return fmt.format(date)
 }
