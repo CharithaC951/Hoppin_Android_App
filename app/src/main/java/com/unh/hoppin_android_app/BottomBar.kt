@@ -2,13 +2,18 @@ package com.unh.hoppin_android_app
 
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DynamicFeed
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.QueuePlayNext
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.DynamicFeed
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.QueuePlayNext
+import androidx.compose.material.icons.outlined.RemoveRedEye
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -52,8 +57,14 @@ fun AppBottomBar(
             selectedIcon = Icons.Filled.FavoriteBorder
         ),
         BottomItem(
-            route = "alerts",
-            label = "Alerts",
+            route = "feed",
+            label = "Feed",
+            icon = Icons.Outlined.DynamicFeed,
+            selectedIcon = Icons.Filled.DynamicFeed
+        ),
+        BottomItem(
+            route = "notifications",
+            label = "Notifications",
             icon = Icons.Outlined.Notifications,
             selectedIcon = Icons.Filled.Notifications
         ),

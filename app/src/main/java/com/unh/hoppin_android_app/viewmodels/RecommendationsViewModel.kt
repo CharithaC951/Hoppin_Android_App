@@ -28,8 +28,99 @@ import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.sqrt
 
+// ------------------------------------------------------------
+// Simple in-memory cache for recommendations (by location + categories)
+// ------------------------------------------------------------
+
+private const val RECOMMENDATION_CACHE_MAX_AGE_MS = 10 * 60 * 1000L // 10 minutes
+
+private data class RecommendationCacheKey(
+    val roundedLat: Double,
+    val roundedLng: Double,
+    val categoryIdsKey: String
+)
+
+private data class RecommendationCacheEntry(
+    val timestamp: Long,
+    val sections: List<RecommendationSection>,
+    val flatItems: List<RecommendationItemWithCategory>
+)
+
+/** Caches entire recommendation results to avoid repeated network calls. */
+private object RecommendationMemoryCache {
+    private val cache = mutableMapOf<RecommendationCacheKey, RecommendationCacheEntry>()
+
+    private fun makeKey(center: LatLng, categories: List<Category>): RecommendationCacheKey {
+        // Round lat/lng so small moves don’t invalidate cache (≈ 100m resolution)
+        val roundedLat = String.format("%.3f", center.latitude).toDouble()
+        val roundedLng = String.format("%.3f", center.longitude).toDouble()
+        val categoryIdsKey = categories
+            .map { it.id }
+            .sorted()
+            .joinToString(",")
+
+        return RecommendationCacheKey(
+            roundedLat = roundedLat,
+            roundedLng = roundedLng,
+            categoryIdsKey = categoryIdsKey
+        )
+    }
+
+    fun get(center: LatLng, categories: List<Category>): RecommendationCacheEntry? {
+        val key = makeKey(center, categories)
+        val now = System.currentTimeMillis()
+        val entry = cache[key] ?: return null
+        return if (now - entry.timestamp <= RECOMMENDATION_CACHE_MAX_AGE_MS) {
+            entry
+        } else {
+            cache.remove(key)
+            null
+        }
+    }
+
+    fun put(
+        center: LatLng,
+        categories: List<Category>,
+        sections: List<RecommendationSection>,
+        flatItems: List<RecommendationItemWithCategory>
+    ) {
+        val key = makeKey(center, categories)
+        cache[key] = RecommendationCacheEntry(
+            timestamp = System.currentTimeMillis(),
+            sections = sections,
+            flatItems = flatItems
+        )
+    }
+}
+
+// ------------------------------------------------------------
+// Simple bitmap cache (placeId -> Bitmap) so we don't refetch photos
+// ------------------------------------------------------------
+
+private object RecommendationPhotoCache {
+    private const val MAX_ENTRIES = 128
+    private val cache = LinkedHashMap<String, Bitmap>(MAX_ENTRIES, 0.75f, true)
+
+    @Synchronized
+    fun get(placeId: String): Bitmap? = cache[placeId]
+
+    @Synchronized
+    fun put(placeId: String, bmp: Bitmap) {
+        cache[placeId] = bmp
+        if (cache.size > MAX_ENTRIES) {
+            // Remove the eldest entry (LRU)
+            val iterator = cache.entries.iterator()
+            if (iterator.hasNext()) {
+                iterator.next()
+                iterator.remove()
+            }
+        }
+    }
+}
+
 /** Represents a single recommended place item. */
 data class RecommendationItem(
+    val placeId: String,
     val title: String,
     val bitmap: Bitmap?,
     val distanceMeters: Double
@@ -37,6 +128,7 @@ data class RecommendationItem(
 
 /** Same as RecommendationItem, but also includes the category name it belongs to. */
 data class RecommendationItemWithCategory(
+    val placeId: String,
     val categoryTitle: String,
     val title: String,
     val bitmap: Bitmap?,
@@ -69,14 +161,10 @@ class RecommendationViewModel : ViewModel() {
     /**
      * Fetches nearby recommendations based on user location and categories.
      *
-     * @param context Android context (required for Places SDK)
-     * @param center User's current location (LatLng)
-     * @param categories List of categories to search (e.g. restaurants, cafes)
-     * @param radiusMeters Search radius in meters
-     * @param maxResults Maximum total places to retrieve (limited by API)
-     * @param perCategory Limit of places shown per category
-     * @param apiKey Optional API key for initializing Places SDK
-     * @param fetchThumbnails Whether to fetch image thumbnails for places
+     * This version:
+     *  1) Checks in-memory cache first (instant result, **no network**).
+     *  2) If cache is missing/stale, calls Places API once, then caches the result.
+     *  3) Reuses cached bitmaps for places (no repeated photo fetch).
      */
     fun load(
         context: Context,
@@ -88,13 +176,24 @@ class RecommendationViewModel : ViewModel() {
         apiKey: String? = null,
         fetchThumbnails: Boolean = true
     ) {
-        // Cap max results between 1–20 as per Places API limitations
-        val max = maxResults.coerceIn(1, 20)
+        // 1) Try cache first – fast path, no loading spinner, no network.
+        val cached = RecommendationMemoryCache.get(center, categories)
+        if (cached != null) {
+            _ui.value = RecommendationsUiState(
+                loading = false,
+                sections = cached.sections,
+                flatItems = cached.flatItems,
+                error = null
+            )
+            // Optional: you could still trigger a silent refresh in background,
+            // but since you asked to avoid extra network calls, we just return.
+            return
+        }
 
-        // Mark UI as loading
+        // 2) Otherwise, mark UI as loading and perform the network call.
+        val max = maxResults.coerceIn(1, 20)
         _ui.value = _ui.value.copy(loading = true, error = null)
 
-        // Launch the data-fetching task in background (IO thread)
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 // Initialize the Places SDK if needed
@@ -111,7 +210,8 @@ class RecommendationViewModel : ViewModel() {
                 )
 
                 // Define the circular search boundary
-                val restriction: LocationRestriction = CircularBounds.newInstance(center, radiusMeters)
+                val restriction: LocationRestriction =
+                    CircularBounds.newInstance(center, radiusMeters)
 
                 // Merge all desired Place types across categories
                 val unionTypes: List<String> = CategoriesRepository.unionTypesFor(categories)
@@ -151,6 +251,7 @@ class RecommendationViewModel : ViewModel() {
                 val flatItems = sections.flatMap { sec ->
                     sec.items.map { it ->
                         RecommendationItemWithCategory(
+                            placeId = it.placeId,
                             categoryTitle = sec.category.title,
                             title = it.title,
                             bitmap = it.bitmap,
@@ -158,6 +259,9 @@ class RecommendationViewModel : ViewModel() {
                         )
                     }
                 }
+
+                // Put into memory cache so future calls are instant
+                RecommendationMemoryCache.put(center, categories, sections, flatItems)
 
                 // Update UI state (success)
                 _ui.value = RecommendationsUiState(
@@ -168,11 +272,11 @@ class RecommendationViewModel : ViewModel() {
                 )
 
             } catch (t: Throwable) {
-                // Handle exceptions gracefully
                 Log.e("RecommendationVM", "load() failed", t)
                 _ui.value = RecommendationsUiState(
                     loading = false,
                     sections = emptyList(),
+                    flatItems = emptyList(),
                     error = t.message ?: "Failed to load"
                 )
             }
@@ -206,9 +310,11 @@ class RecommendationViewModel : ViewModel() {
                 }
                 if (items.isNotEmpty()) sections += RecommendationSection(cat, items)
             }
+
             val flatItems = sections.flatMap { sec ->
                 sec.items.map { it ->
                     RecommendationItemWithCategory(
+                        placeId = it.placeId,
                         categoryTitle = sec.category.title,
                         title = it.title,
                         bitmap = it.bitmap,
@@ -216,6 +322,9 @@ class RecommendationViewModel : ViewModel() {
                     )
                 }
             }
+
+            // Also refresh cache when we derive locally
+            RecommendationMemoryCache.put(center, categories, sections, flatItems)
 
             _ui.value = _ui.value.copy(sections = sections, flatItems = flatItems)
         }
@@ -239,7 +348,7 @@ class RecommendationViewModel : ViewModel() {
 
     /**
      * Converts a Place object into a RecommendationItem.
-     * Optionally fetches a thumbnail image if available.
+     * Reuses cached thumbnails when available; otherwise fetches and caches them.
      */
     private suspend fun buildItem(
         client: PlacesClient,
@@ -247,38 +356,64 @@ class RecommendationViewModel : ViewModel() {
         center: LatLng,
         fetchThumb: Boolean
     ): RecommendationItem? {
+        val id: String = place.id ?: return null
         val title: String = place.name ?: return null
         val ll = place.latLng ?: return null
 
         // Calculate distance between current location and place
         val distance = haversine(center.latitude, center.longitude, ll.latitude, ll.longitude)
 
-        // Attempt to fetch thumbnail image from Places API
-        val bmp: Bitmap? = if (fetchThumb) {
-            val meta: PhotoMetadata? = place.photoMetadatas?.firstOrNull()
-            if (meta != null) {
-                runCatching {
-                    client.fetchPhoto(
-                        FetchPhotoRequest.builder(meta)
-                            .setMaxWidth(640)
-                            .setMaxHeight(360) // Reasonable thumbnail size
-                            .build()
-                    ).await().bitmap
-                }.getOrNull()
-            } else null
-        } else null
+        // Try bitmap cache first
+        var bmp: Bitmap? = null
 
-        return RecommendationItem(title = title, bitmap = bmp, distanceMeters = distance)
+        if (fetchThumb) {
+            // 1. See if we already have this thumbnail in memory
+            bmp = RecommendationPhotoCache.get(id)
+
+            // 2. If not cached, try fetching once
+            if (bmp == null) {
+                val meta: PhotoMetadata? = place.photoMetadatas?.firstOrNull()
+                if (meta != null) {
+                    bmp = runCatching {
+                        client.fetchPhoto(
+                            FetchPhotoRequest.builder(meta)
+                                .setMaxWidth(640)
+                                .setMaxHeight(360) // Reasonable thumbnail size
+                                .build()
+                        ).await().bitmap
+                    }.getOrNull()
+
+                    if (bmp != null) {
+                        RecommendationPhotoCache.put(id, bmp!!)
+                    }
+                }
+            }
+        }
+
+        return RecommendationItem(
+            placeId = id,
+            title = title,
+            bitmap = bmp,
+            distanceMeters = distance
+        )
     }
 
     /**
      * Creates an offline recommendation item (no network call or image fetching).
      */
     private fun offlineItem(place: Place, center: LatLng): RecommendationItem? {
+        val id: String = place.id ?: return null
         val title: String = place.name ?: return null
         val ll = place.latLng ?: return null
         val distance = haversine(center.latitude, center.longitude, ll.latitude, ll.longitude)
-        return RecommendationItem(title = title, bitmap = null, distanceMeters = distance)
+        val cachedBmp = RecommendationPhotoCache.get(id)
+
+        return RecommendationItem(
+            placeId = id,
+            title = title,
+            bitmap = cachedBmp,
+            distanceMeters = distance
+        )
     }
 
     /**

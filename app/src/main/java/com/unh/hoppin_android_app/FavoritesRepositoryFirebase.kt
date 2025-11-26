@@ -35,10 +35,14 @@ object FavoritesRepositoryFirebase {
     }
 
     /** Add one ID (idempotent). */
-    suspend fun add(placeId: String) {
+    suspend fun add(placeName: String, placeId: String) {
         userDoc()
             .set(mapOf(KEY_FAVORITES to FieldValue.arrayUnion(placeId)), SetOptions.merge())
             .await()
+        NotificationRepositoryFirebase.createNotification(
+            title = "New Favorite Added",
+            message = "You have added '$placeName' to your favorites."
+        )
     }
 
     /** Remove one ID (idempotent). */

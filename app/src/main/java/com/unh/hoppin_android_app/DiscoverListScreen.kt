@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -45,6 +47,12 @@ import com.google.android.libraries.places.api.net.FetchPlaceRequest
 import com.google.android.libraries.places.api.net.PlacesClient
 import com.google.android.libraries.places.api.net.SearchNearbyRequest
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Calendar
@@ -53,6 +61,10 @@ import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
+
+// Keep photos small for speed
+private const val PHOTO_MAX_WIDTH = 640
+private const val PHOTO_MAX_HEIGHT = 400
 
 /* ------------------------------------------------------------------ */
 /* Filters                                                            */
@@ -67,6 +79,64 @@ data class DiscoverFilters(
     val onlyWithPhoto: Boolean = false,
     val onlyFavorites: Boolean = false
 )
+
+/* ------------------------------------------------------------------ */
+/* Simple in-memory cache for nearby sections                         */
+/* ------------------------------------------------------------------ */
+
+private data class SectionsCacheKey(
+    val latBucket: Int,
+    val lngBucket: Int,
+    val radius: Int,
+    val maxResults: Int,
+    val typesSignature: String
+)
+
+private object DiscoverNearbyCache {
+    private val cache = mutableMapOf<SectionsCacheKey, List<UiSection>>()
+
+    fun get(key: SectionsCacheKey): List<UiSection>? = cache[key]
+
+    fun put(key: SectionsCacheKey, sections: List<UiSection>) {
+        cache[key] = sections
+    }
+
+    fun clear() {
+        cache.clear()
+    }
+}
+
+// Default set used for prefetch
+val DefaultPrefetchTypes: List<String> = listOf(
+    "restaurant",
+    "cafe",
+    "bar",
+    "bakery",
+    "tourist_attraction",
+    "museum",
+    "park",
+    "shopping_mall",
+    "clothing_store"
+)
+
+/**
+ * Called from MainActivity once we know the user's location.
+ * Warms cache with metadata (no photos).
+ */
+suspend fun prefetchNearbyForCenter(
+    client: PlacesClient,
+    center: LatLng,
+    radiusMeters: Int = 2_000,
+    maxResults: Int = 12        // slightly smaller for speed
+) {
+    loadNearbySectionsWithPhotosDistanceRatingOpenNow(
+        client = client,
+        center = center,
+        typesOrdered = DefaultPrefetchTypes,
+        radiusMeters = radiusMeters,
+        maxResults = maxResults
+    )
+}
 
 /* ------------------------------------------------------------------ */
 /* Screen                                                             */
@@ -197,7 +267,7 @@ fun DiscoverListScreen(
                         .padding(inner)
                         .padding(horizontal = 16.dp)
                 ) {
-                    // Filter bar (LazyRow)
+                    // Filter bar
                     FilterBar(
                         filters = filters,
                         onChange = { filters = it }
@@ -207,6 +277,7 @@ fun DiscoverListScreen(
 
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
+                        state = listState,
                         contentPadding = PaddingValues(vertical = 12.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
@@ -244,6 +315,12 @@ fun DiscoverListScreen(
 
                                         PlaceCardMinimal(
                                             place = place,
+                                            photo = cachedPhoto,
+                                            client = client,
+                                            isVisible = isVisible,
+                                            onPhotoLoaded = { bmp ->
+                                                photoCache[place.id] = bmp
+                                            },
                                             isFavorited = isFav,
                                             onClick = { onPlaceClick(place) },
                                             onToggleFavorite = {
@@ -365,10 +442,11 @@ private fun FilterBar(
 data class UiPlace(
     val id: String,
     val title: String,
-    val photo: Bitmap?,
+    val photo: Bitmap?,                         // kept for compatibility
     val distanceMeters: Int? = null,
     val rating: Float? = null,
-    val isOpenNow: Boolean? = null
+    val isOpenNow: Boolean? = null,
+    val photoMetadata: PhotoMetadata? = null    // used for lazy photo loading
 )
 
 data class UiSection(val type: String, val items: List<UiPlace>)
@@ -401,7 +479,9 @@ val CategoryToTypes: Map<Int, List<String>> = mapOf(
     8 to listOf("post_office", "bank", "atm", "gas_station", "car_repair")
 )
 
-private suspend fun loadNearbySectionsWithPhotosDistanceRatingOpenNow(
+/* --------------------------- Loading with cache + parallelism ------- */
+
+suspend fun loadNearbySectionsWithPhotosDistanceRatingOpenNow(
     client: PlacesClient,
     center: LatLng,
     typesOrdered: List<String>,
@@ -413,21 +493,48 @@ private suspend fun loadNearbySectionsWithPhotosDistanceRatingOpenNow(
             searchNearbyOneTypeHydrated(client, center, null, radiusMeters, maxResults)
         return@withContext listOf(UiSection(type = "places", items = generic))
     }
-    typesOrdered.map { t ->
-        UiSection(
-            type = t,
-            items = searchNearbyOneTypeHydrated(client, center, t, radiusMeters, maxResults)
+
+    // 2) Fetch if not cached (metadata only, no photos)
+    val sections: List<UiSection> = if (typesOrdered.isEmpty()) {
+        val generic = searchNearbyOneTypeHydrated(
+            client = client,
+            center = center,
+            type = null,
+            radiusMeters = radiusMeters,
+            maxResults = maxResults
         )
+        listOf(UiSection(type = "places", items = generic))
+    } else {
+        coroutineScope {
+            typesOrdered.map { t ->
+                async {
+                    val items = searchNearbyOneTypeHydrated(
+                        client = client,
+                        center = center,
+                        type = t,
+                        radiusMeters = radiusMeters,
+                        maxResults = maxResults
+                    )
+                    UiSection(type = t, items = items)
+                }
+            }.awaitAll()
+        }
     }
+
+    // 3) Save to cache
+    DiscoverNearbyCache.put(key, sections)
+    return@withContext sections
 }
 
-private fun searchNearbyOneTypeHydrated(
+/* --------------------------- Search + hydrate (no photos) ---------- */
+
+private suspend fun searchNearbyOneTypeHydrated(
     client: PlacesClient,
     center: LatLng,
     type: String?,
     radiusMeters: Int,
     maxResults: Int
-): List<UiPlace> {
+): List<UiPlace> = withContext(Dispatchers.IO) {
     val bounds = CircularBounds.newInstance(center, radiusMeters.toDouble())
     val nearbyFields = listOf(Place.Field.ID, Place.Field.NAME)
     val nearbyReq = SearchNearbyRequest
@@ -438,22 +545,55 @@ private fun searchNearbyOneTypeHydrated(
         }
         .build()
 
-    val nearbyResp = runCatching { Tasks.await(client.searchNearby(nearbyReq)) }.getOrNull()
-        ?: return emptyList()
-    val candidates = nearbyResp.places.orEmpty()
+    val nearbyResp = runCatching {
+        Tasks.await(client.searchNearby(nearbyReq))
+    }.getOrNull() ?: return@withContext emptyList()
 
-    return candidates.mapNotNull { p ->
-        val placeId = p.id ?: return@mapNotNull null
-        val fetched = runCatching {
-            val req = FetchPlaceRequest.builder(
-                placeId,
-                listOf(
-                    Place.Field.ID,
-                    Place.Field.NAME,
-                    Place.Field.PHOTO_METADATAS,
-                    Place.Field.LAT_LNG,
-                    Place.Field.RATING,
-                    Place.Field.OPENING_HOURS
+    val candidates = nearbyResp.places.orEmpty()
+    if (candidates.isEmpty()) return@withContext emptyList()
+
+    // Hydrate metadata in parallel (ID, title, rating, openNow, photoMetadata)
+    return@withContext coroutineScope {
+        val deferreds = candidates.mapNotNull { p ->
+            val placeId = p.id ?: return@mapNotNull null
+            async(Dispatchers.IO) {
+                val fetched = runCatching {
+                    val req = FetchPlaceRequest.builder(
+                        placeId,
+                        listOf(
+                            Place.Field.ID,
+                            Place.Field.NAME,
+                            Place.Field.PHOTO_METADATAS,
+                            Place.Field.LAT_LNG,
+                            Place.Field.RATING,
+                            Place.Field.OPENING_HOURS
+                        )
+                    ).build()
+                    Tasks.await(client.fetchPlace(req)).place
+                }.getOrNull() ?: return@async null
+
+                val title = fetched.name ?: return@async null
+                val meta: PhotoMetadata? = fetched.photoMetadatas?.firstOrNull()
+
+                val d = fetched.latLng?.let { ll ->
+                    distanceMeters(
+                        center.latitude,
+                        center.longitude,
+                        ll.latitude,
+                        ll.longitude
+                    ).roundToInt()
+                }
+                val rating = fetched.rating?.toFloat()
+                val isOpen = computeIsOpenNow(fetched.openingHours)
+
+                UiPlace(
+                    id = placeId,
+                    title = title,
+                    photo = null,           // no photo yet
+                    distanceMeters = d,
+                    rating = rating,
+                    isOpenNow = isOpen,
+                    photoMetadata = meta
                 )
             ).build()
             Tasks.await(client.fetchPlace(req)).place
@@ -480,8 +620,6 @@ private fun searchNearbyOneTypeHydrated(
                 ll.longitude
             ).roundToInt()
         }
-        val rating = fetched.rating?.toFloat()
-        val isOpen = computeIsOpenNow(fetched.openingHours)
 
         UiPlace(
             id = placeId,
@@ -494,7 +632,58 @@ private fun searchNearbyOneTypeHydrated(
     }
 }
 
-/* --------------------------- Apply filters to section --------------------------- */
+/* --------------------------- Lazy photo loader ---------------------- */
+
+@Composable
+private fun PlaceCardWithLazyPhoto(
+    place: UiPlace,
+    photo: Bitmap?,
+    client: PlacesClient,
+    isVisible: Boolean,
+    onPhotoLoaded: (Bitmap?) -> Unit,
+    isFavorited: Boolean,
+    onClick: () -> Unit,
+    onToggleFavorite: () -> Unit
+) {
+    var localPhoto by remember(place.id) { mutableStateOf(photo) }
+
+    // Only start fetching when the row is actually visible
+    LaunchedEffect(place.id, isVisible) {
+        if (!isVisible) return@LaunchedEffect
+        if (localPhoto == null && place.photoMetadata != null) {
+            // Small delay to avoid flapping when scrolling quickly
+            delay(150)
+            if (!isVisible) return@LaunchedEffect
+
+            val bmp = fetchPhotoBitmap(client, place.photoMetadata)
+            localPhoto = bmp
+            onPhotoLoaded(bmp)
+        }
+    }
+
+    PlaceCardMinimal(
+        place = place,
+        photo = localPhoto,
+        isFavorited = isFavorited,
+        onClick = onClick,
+        onToggleFavorite = onToggleFavorite
+    )
+}
+
+private suspend fun fetchPhotoBitmap(
+    client: PlacesClient,
+    meta: PhotoMetadata
+): Bitmap? = withContext(Dispatchers.IO) {
+    runCatching {
+        val preq = FetchPhotoRequest.builder(meta)
+            .setMaxWidth(PHOTO_MAX_WIDTH)
+            .setMaxHeight(PHOTO_MAX_HEIGHT)
+            .build()
+        Tasks.await(client.fetchPhoto(preq)).bitmap
+    }.getOrNull()
+}
+
+/* --------------------------- Apply filters to section -------------- */
 
 private fun applyFiltersToSection(
     section: UiSection,
@@ -505,7 +694,7 @@ private fun applyFiltersToSection(
 
     if (f.openNow) items = items.filter { it.isOpenNow == true }
     f.minRating?.let { min -> items = items.filter { (it.rating ?: 0f) >= min } }
-    if (f.onlyWithPhoto) items = items.filter { it.photo != null }
+    if (f.onlyWithPhoto) items = items.filter { it.photoMetadata != null }
     if (f.onlyFavorites) items = items.filter { favIds.contains(it.id) }
 
     items = when (f.sort) {
@@ -520,6 +709,7 @@ private fun applyFiltersToSection(
 @Composable
 fun PlaceCardMinimal(
     place: UiPlace,
+    photo: Bitmap? = place.photo, // use passed photo (lazy-loaded), fallback to place.photo
     isFavorited: Boolean,
     onClick: () -> Unit,
     onToggleFavorite: () -> Unit
@@ -541,9 +731,9 @@ fun PlaceCardMinimal(
         )
     ) {
         Column {
-            if (place.photo != null) {
+            if (photo != null) {
                 Image(
-                    bitmap = place.photo.asImageBitmap(),
+                    bitmap = photo.asImageBitmap(),
                     contentDescription = place.title,
                     modifier = Modifier
                         .fillMaxWidth()
