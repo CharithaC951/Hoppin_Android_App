@@ -74,8 +74,8 @@ enum class SortOption { NEAREST, FARTHEST }
 
 data class DiscoverFilters(
     val sort: SortOption = SortOption.NEAREST,
-    val openNow: Boolean = false,         // client-side
-    val minRating: Float? = 4.0f,         // client-side
+    val openNow: Boolean = false,     // client-side
+    val minRating: Float? = null,     // no default rating filter
     val onlyWithPhoto: Boolean = false,
     val onlyFavorites: Boolean = false
 )
@@ -148,9 +148,9 @@ fun DiscoverListScreen(
     selectedTypes: List<String> = emptyList(),
     selectedCategoryId: Int? = null,
     placesClient: PlacesClient? = null,
-    center: LatLng? = null,
-    radiusMeters: Int = 2_000,
-    maxResults: Int = 12,    // default reduced from 20 -> 12
+    center: LatLng? = null,                 // GPS location passed from MainActivity
+    radiusMeters: Int = 1_500,              // < 1 mile (~0.93 mi)
+    maxResults: Int = 10,                   // fewer places per type for faster load
     onBack: () -> Unit = {},
     onPlaceClick: (UiPlace) -> Unit = {},
     onOpenFavorites: () -> Unit = {}
@@ -159,23 +159,15 @@ fun DiscoverListScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
-    // Reuse a single PlacesClient instance
-    val client: PlacesClient = remember(placesClient, context) {
-        placesClient ?: Places.createClient(context)
-    }
-
-    val favIds: Set<String> by FavoritesRepositoryFirebase.favoriteIdsFlow()
+    val favIds: Set<String> by FavoritesRepositoryFirebase
+        .favoriteIdsFlow()
         .collectAsState(initial = emptySet())
+
     var transientAdded by remember { mutableStateOf(setOf<String>()) }
 
+    // start with no filters enabled
     var filters by remember {
-        mutableStateOf(
-            DiscoverFilters(
-                sort = SortOption.NEAREST,
-                openNow = false,
-                minRating = 4.0f
-            )
-        )
+        mutableStateOf(DiscoverFilters())
     }
 
     val dynamicTitle = remember(selectedTypes, selectedCategoryId) {
@@ -195,39 +187,27 @@ fun DiscoverListScreen(
         }
     }
 
-    val safeCenter = center ?: LatLng(41.3100, -72.9300) // fallback (New Haven)
     var ui by remember { mutableStateOf(ListUi(loading = true)) }
 
-    // Photo cache: placeId -> Bitmap?
-    val photoCache = remember { mutableStateMapOf<String, Bitmap?>() }
-
-    // Track which place IDs are actually visible in the list
-    val listState = rememberLazyListState()
-    var visiblePlaceIds by remember { mutableStateOf<Set<String>>(emptySet()) }
-
-    // Observe visible keys and map them to place IDs ("place-<id>" keys)
-    LaunchedEffect(listState) {
-        snapshotFlow { listState.layoutInfo.visibleItemsInfo }
-            .map { infos ->
-                infos.mapNotNull { item ->
-                    val key = item.key
-                    if (key is String && key.startsWith("place-")) {
-                        key.removePrefix("place-")
-                    } else null
-                }.toSet()
-            }
-            .distinctUntilChanged()
-            .collect { ids ->
-                visiblePlaceIds = ids
-            }
-    }
-
-    LaunchedEffect(activeTypes, safeCenter, radiusMeters, maxResults, client) {
+    LaunchedEffect(activeTypes, center, radiusMeters, maxResults, placesClient, context) {
         ui = ui.copy(loading = true, error = null)
+
+        val currentCenter = center
+        if (currentCenter == null) {
+            // No fallback – only GPS. If null, show error.
+            ui = ListUi(
+                loading = false,
+                sections = emptyList(),
+                error = "Location unavailable"
+            )
+            return@LaunchedEffect
+        }
+
+        val client = placesClient ?: Places.createClient(context)
         val result = runCatching {
             loadNearbySectionsWithPhotosDistanceRatingOpenNow(
                 client = client,
-                center = safeCenter,
+                center = currentCenter,
                 typesOrdered = activeTypes,
                 radiusMeters = radiusMeters,
                 maxResults = maxResults
@@ -267,14 +247,18 @@ fun DiscoverListScreen(
                     .fillMaxSize()
                     .padding(inner),
                 contentAlignment = Alignment.Center
-            ) { CircularProgressIndicator() }
+            ) {
+                CircularProgressIndicator()
+            }
 
             ui.error != null -> Box(
                 Modifier
                     .fillMaxSize()
                     .padding(inner),
                 contentAlignment = Alignment.Center
-            ) { Text(ui.error!!, color = MaterialTheme.colorScheme.error) }
+            ) {
+                Text(ui.error!!, color = MaterialTheme.colorScheme.error)
+            }
 
             else -> {
                 Column(
@@ -325,16 +309,11 @@ fun DiscoverListScreen(
                                         )
                                     }
                                 } else {
-                                    itemsIndexed(
-                                        section.items,
-                                        key = { _, place -> "place-${place.id}" }
-                                    ) { _, place ->
+                                    items(section.items, key = { it.id }) { place ->
                                         val isFav =
                                             favIds.contains(place.id) || transientAdded.contains(place.id)
-                                        val cachedPhoto = photoCache[place.id]
-                                        val isVisible = visiblePlaceIds.contains(place.id)
 
-                                        PlaceCardWithLazyPhoto(
+                                        PlaceCardMinimal(
                                             place = place,
                                             photo = cachedPhoto,
                                             client = client,
@@ -348,10 +327,7 @@ fun DiscoverListScreen(
                                                 transientAdded = transientAdded + place.id
                                                 scope.launch {
                                                     runCatching {
-                                                        FavoritesRepositoryFirebase.add(
-                                                            place.title,
-                                                            place.id
-                                                        )
+                                                        FavoritesRepositoryFirebase.add(place.id)
                                                     }
                                                     snackbarHostState.currentSnackbarData?.dismiss()
                                                     snackbarHostState.showSnackbar("Added to favourites")
@@ -415,7 +391,10 @@ private fun FilterBar(
                     },
                     label = {
                         Text(
-                            if (filters.sort == SortOption.NEAREST) "Nearest" else "Farthest"
+                            if (filters.sort == SortOption.NEAREST)
+                                "Nearest"
+                            else
+                                "Farthest"
                         )
                     },
                     colors = chipColors(filters.sort == SortOption.NEAREST)
@@ -478,11 +457,22 @@ data class ListUi(
     val error: String? = null
 )
 
+/**
+ * Category mapping – updated Shopping (4) to also include "grocery_or_supermarket"
+ * so things like Stop & Shop can show up under that category.
+ */
 val CategoryToTypes: Map<Int, List<String>> = mapOf(
     1 to listOf("tourist_attraction", "museum", "art_gallery", "park"),
     2 to listOf("restaurant", "bar", "cafe", "bakery"),
     3 to listOf("movie_theater", "night_club", "bowling_alley", "casino"),
-    4 to listOf("shopping_mall", "clothing_store", "department_store", "store", "supermarket"),
+    4 to listOf( // Shopping
+        "shopping_mall",
+        "clothing_store",
+        "department_store",
+        "store",
+        "supermarket",
+        "grocery_or_supermarket" // 👈 added for grocery chains like Stop & Shop
+    ),
     5 to listOf("spa", "lodging", "campground"),
     6 to listOf("gym", "pharmacy", "doctor", "beauty_salon"),
     7 to listOf("hospital", "police", "fire_station"),
@@ -498,18 +488,10 @@ suspend fun loadNearbySectionsWithPhotosDistanceRatingOpenNow(
     radiusMeters: Int,
     maxResults: Int
 ): List<UiSection> = withContext(Dispatchers.IO) {
-    val key = SectionsCacheKey(
-        latBucket = (center.latitude * 1000).toInt(),
-        lngBucket = (center.longitude * 1000).toInt(),
-        radius = radiusMeters,
-        maxResults = maxResults,
-        typesSignature = if (typesOrdered.isEmpty()) "generic"
-        else typesOrdered.joinToString(",")
-    )
-
-    // 1) Check cache first
-    DiscoverNearbyCache.get(key)?.let { cached ->
-        return@withContext cached
+    if (typesOrdered.isEmpty()) {
+        val generic =
+            searchNearbyOneTypeHydrated(client, center, null, radiusMeters, maxResults)
+        return@withContext listOf(UiSection(type = "places", items = generic))
     }
 
     // 2) Fetch if not cached (metadata only, no photos)
@@ -558,7 +540,9 @@ private suspend fun searchNearbyOneTypeHydrated(
     val nearbyReq = SearchNearbyRequest
         .builder(bounds, nearbyFields)
         .setMaxResultCount(maxResults)
-        .apply { if (!type.isNullOrBlank()) setIncludedTypes(listOf(type)) }
+        .apply {
+            if (!type.isNullOrBlank()) setIncludedTypes(listOf(type))
+        }
         .build()
 
     val nearbyResp = runCatching {
@@ -611,10 +595,40 @@ private suspend fun searchNearbyOneTypeHydrated(
                     isOpenNow = isOpen,
                     photoMetadata = meta
                 )
-            }
+            ).build()
+            Tasks.await(client.fetchPlace(req)).place
+        }.getOrNull() ?: return@mapNotNull null
+
+        val title = fetched.name ?: return@mapNotNull null
+        val meta: PhotoMetadata? = fetched.photoMetadatas?.firstOrNull()
+        val bmp: Bitmap? = if (meta != null) {
+            runCatching {
+                val preq = FetchPhotoRequest
+                    .builder(meta)
+                    .setMaxWidth(1280)
+                    .setMaxHeight(720)
+                    .build()
+                Tasks.await(client.fetchPhoto(preq)).bitmap
+            }.getOrNull()
+        } else null
+
+        val d = fetched.latLng?.let { ll ->
+            distanceMeters(
+                center.latitude,
+                center.longitude,
+                ll.latitude,
+                ll.longitude
+            ).roundToInt()
         }
 
-        deferreds.awaitAll().filterNotNull()
+        UiPlace(
+            id = placeId,
+            title = title,
+            photo = bmp,
+            distanceMeters = d,
+            rating = rating,
+            isOpenNow = isOpen
+        )
     }
 }
 
@@ -712,7 +726,9 @@ fun PlaceCardMinimal(
             .clickable { onClick() },
         shape = RoundedCornerShape(18.dp),
         elevation = CardDefaults.cardElevation(4.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFFDE7)) // very light yellow
+        colors = CardDefaults.cardColors(
+            containerColor = Color(0xFFFFFDE7) // very light yellow
+        )
     ) {
         Column {
             if (photo != null) {
@@ -721,22 +737,22 @@ fun PlaceCardMinimal(
                     contentDescription = place.title,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(180.dp),
+                        .height(200.dp),
                     contentScale = ContentScale.Crop
                 )
             } else {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(180.dp)
-                        .background(Color(0xFFFFECB3)), // warm placeholder
+                        .height(200.dp)
+                        .background(Color(0xFFFFECB3)),
                     contentAlignment = Alignment.Center
                 ) {
                     Box(
                         modifier = Modifier
                             .size(44.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFFFFE082)) // lighter warm dot
+                            .background(Color(0xFFFFE082))
                     )
                 }
             }
@@ -756,7 +772,7 @@ fun PlaceCardMinimal(
                     )
                     place.distanceMeters?.let {
                         Text(
-                            formatDistance(it),
+                            formatDistanceImperial(it),
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
@@ -806,9 +822,12 @@ private fun readableFromType(type: String): String {
         "car_repair" to "Car Repair",
         "tourist_attraction" to "Tourist Attraction"
     )
-    return special[type] ?: type.split('_')
+    return special[type] ?: type
+        .split('_')
         .filter { it.isNotBlank() }
-        .joinToString(" ") { it.replaceFirstChar { c -> c.titlecase() } }
+        .joinToString(" ") { word ->
+            word.replaceFirstChar { c -> c.titlecase() }
+        }
 }
 
 private fun categoryTitle(categoryId: Int): String = when (categoryId) {
@@ -832,17 +851,31 @@ private fun distanceMeters(
     val R = 6371000.0
     val dLat = Math.toRadians(lat2 - lat1)
     val dLon = Math.toRadians(lon2 - lon1)
-    val a = sin(dLat / 2) * sin(dLat / 2) +
-            cos(Math.toRadians(lat1)) *
-            cos(Math.toRadians(lat2)) *
-            sin(dLon / 2) *
-            sin(dLon / 2)
+    val a =
+        sin(dLat / 2) * sin(dLat / 2) +
+                cos(Math.toRadians(lat1)) *
+                cos(Math.toRadians(lat2)) *
+                sin(dLon / 2) * sin(dLon / 2)
     return R * 2 * atan2(sqrt(a), sqrt(1 - a))
 }
 
-private fun formatDistance(m: Int): String =
-    if (m >= 1000) String.format("%.1f km away", m / 1000.0)
-    else "$m m away"
+/**
+ * Match the recommendation carousel style:
+ * - If >= 1 mile (1609m): show miles with 1 decimal (e.g., "0.9 mi")
+ * - Else: show feet as integer (e.g., "800 ft")
+ */
+private fun formatDistanceImperial(meters: Int): String {
+    val m = meters.toDouble()
+    return if (m >= 1609.0) {
+        val milesTimes10 = ((m / 1609.34) * 10.0)
+        val roundedTimes10 = kotlin.math.round(milesTimes10)
+        val miles = roundedTimes10 / 10.0
+        "$miles mi"
+    } else {
+        val feet = kotlin.math.round(m * 3.28084).toInt()
+        "$feet ft"
+    }
+}
 
 /* --------------------------- Open-now computation --------------------------- */
 
@@ -850,7 +883,7 @@ private fun computeIsOpenNow(hours: OpeningHours?): Boolean? {
     val periods: List<Period> = hours?.periods ?: return null
 
     val cal = Calendar.getInstance()
-    val currentIdx = calendarDayToIdx(cal.get(Calendar.DAY_OF_WEEK)) // 0..6 (Mon=0..Sun=6)
+    val currentIdx = calendarDayToIdx(cal.get(Calendar.DAY_OF_WEEK)) // 0..6
     val nowMinutes = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
 
     for (p in periods) {

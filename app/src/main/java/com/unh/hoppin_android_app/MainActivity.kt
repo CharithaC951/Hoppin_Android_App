@@ -301,8 +301,7 @@ class MainActivity : ComponentActivity() {
                                         selectedTypes = typeArg.split(',')
                                             .filter { it.isNotBlank() },
                                         selectedCategoryId = categoryId.takeIf { it != -1 },
-                                        center = deviceCenter,
-                                        placesClient = placesClient, // use same client
+                                        center = deviceCenter, // now matches param in DiscoverListScreen
                                         onBack = { navController.popBackStack() },
                                         onPlaceClick = { uiPlace ->
                                             navController.navigate("place/${uiPlace.id}")
@@ -311,6 +310,7 @@ class MainActivity : ComponentActivity() {
                                             navController.navigate("favorites")
                                         }
                                     )
+
                                 }
                                 composable(
                                     route = "place/{placeId}",
@@ -477,8 +477,7 @@ class MainActivity : ComponentActivity() {
                                     selectedTypes = typeArg.split(',')
                                         .filter { it.isNotBlank() },
                                     selectedCategoryId = categoryId.takeIf { it != -1 },
-                                    center = deviceCenter,
-                                    placesClient = placesClient, // same client
+                                    center = deviceCenter, // now matches param in DiscoverListScreen
                                     onBack = { navController.popBackStack() },
                                     onPlaceClick = { uiPlace ->
                                         navController.navigate("place/${uiPlace.id}")
@@ -487,6 +486,7 @@ class MainActivity : ComponentActivity() {
                                         navController.navigate("favorites")
                                     }
                                 )
+
                             }
                             composable(
                                 route = "place/{placeId}",

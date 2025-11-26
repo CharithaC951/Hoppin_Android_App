@@ -52,10 +52,17 @@ object FavoritesRepositoryFirebase {
             .await()
     }
 
-    /** Toggle. */
-    suspend fun toggle(placeName: String,placeId: String) {
-        val before = (userDoc().get().await().get(KEY_FAVORITES) as? List<*>)?.filterIsInstance<String>()?.toSet()
+    /** Toggle favourite state for a given placeId. */
+    suspend fun toggle(placeId: String) {
+        val before = (userDoc().get().await().get(KEY_FAVORITES) as? List<*>)
+            ?.filterIsInstance<String>()
+            ?.toSet()
             ?: emptySet()
-        if (before.contains(placeId)) remove(placeId) else add(placeName,placeId)
+
+        if (before.contains(placeId)) {
+            remove(placeId)
+        } else {
+            add(placeId)
+        }
     }
 }
