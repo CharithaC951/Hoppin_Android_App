@@ -145,8 +145,9 @@ private fun HomeScreenContent(
 
             if (latLng == null) {
                 locationError = "Location unavailable"
-                deviceLatLng = LatLng(41.3083, -72.9279) // New Haven fallback
-                streetCity = "New Haven"
+                // 🔴 removed New Haven fallback – now no default city
+                deviceLatLng = null
+                streetCity = null
             } else {
                 // Got a location: keep it and attempt reverse-geocoding
                 deviceLatLng = latLng
@@ -155,13 +156,15 @@ private fun HomeScreenContent(
         } catch (e: SecurityException) {
             // Permission missing or revoked while running
             locationError = "Location permission not granted"
-            deviceLatLng = LatLng(41.3083, -72.9279)
-            streetCity = "New Haven"
+            // 🔴 removed New Haven fallback
+            deviceLatLng = null
+            streetCity = null
         } catch (e: Exception) {
             // Generic failure (network, geocoder, etc.)
             locationError = "Location error"
-            deviceLatLng = LatLng(41.3083, -72.9279)
-            streetCity = "New Haven"
+            // 🔴 removed New Haven fallback
+            deviceLatLng = null
+            streetCity = null
         } finally {
             loading = false
         }

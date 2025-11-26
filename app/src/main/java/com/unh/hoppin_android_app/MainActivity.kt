@@ -193,13 +193,14 @@ class MainActivity : ComponentActivity() {
                                     DiscoverListScreen(
                                         selectedTypes = typeArg.split(',').filter { it.isNotBlank() },
                                         selectedCategoryId = categoryId.takeIf { it != -1 },
-                                        center = deviceCenter, // ✅ pass device location when available
+                                        center = deviceCenter, // now matches param in DiscoverListScreen
                                         onBack = { navController.popBackStack() },
                                         onPlaceClick = { uiPlace ->
                                             navController.navigate("place/${uiPlace.id}")
                                         },
                                         onOpenFavorites = { navController.navigate("favorites") }
                                     )
+
                                 }
                                 composable(
                                     route = "place/{placeId}",
@@ -283,13 +284,14 @@ class MainActivity : ComponentActivity() {
                                 DiscoverListScreen(
                                     selectedTypes = typeArg.split(',').filter { it.isNotBlank() },
                                     selectedCategoryId = categoryId.takeIf { it != -1 },
-                                    center = deviceCenter, // ✅ pass device location here as well
+                                    center = deviceCenter, // now matches param in DiscoverListScreen
                                     onBack = { navController.popBackStack() },
                                     onPlaceClick = { uiPlace ->
                                         navController.navigate("place/${uiPlace.id}")
                                     },
                                     onOpenFavorites = { navController.navigate("favorites") }
                                 )
+
                             }
                             composable(
                                 route = "place/{placeId}",
