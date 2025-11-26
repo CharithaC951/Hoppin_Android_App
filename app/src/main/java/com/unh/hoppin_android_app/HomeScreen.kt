@@ -143,7 +143,7 @@ private fun HomeScreenContent(
 
             if (latLng == null) {
                 // ❌ No GPS fix — don't force any default city
-                locationError = "Location unavailable"
+                locationError = "Fetching.."
                 deviceLatLng = null
                 streetCity = null
             } else {
@@ -290,7 +290,13 @@ private fun HomeScreenContent(
 
             BrowseCategoriesSection(navController = navController, categories = categories)
             Spacer(modifier = Modifier.height(20.dp))
-            RecommendationsBlock(ui = recoUi)
+            RecommendationsBlock(
+                ui = recoUi,
+                outerHorizontalPadding = 24.dp,
+                onPlaceClick = { placeId ->
+                    navController.navigate("place/$placeId")
+                }
+            )
             Spacer(modifier = Modifier.height(20.dp))
         }
         FloatingActionButton(
