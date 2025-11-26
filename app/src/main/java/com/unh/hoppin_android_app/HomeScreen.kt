@@ -143,9 +143,8 @@ private fun HomeScreenContent(
 
             if (latLng == null) {
                 locationError = "Location unavailable"
-                // 🔴 removed New Haven fallback – now no default city
-                deviceLatLng = null
-                streetCity = null
+                deviceLatLng = LatLng(41.3083, -72.9279) // New Haven fallback
+                streetCity = "New Haven"
             } else {
                 // Got a location: keep it and attempt reverse-geocoding
                 deviceLatLng = latLng
@@ -154,15 +153,13 @@ private fun HomeScreenContent(
         } catch (e: SecurityException) {
             // Permission missing or revoked while running
             locationError = "Location permission not granted"
-            // 🔴 removed New Haven fallback
-            deviceLatLng = null
-            streetCity = null
+            deviceLatLng = LatLng(41.3083, -72.9279)
+            streetCity = "New Haven"
         } catch (e: Exception) {
             // Generic failure (network, geocoder, etc.)
             locationError = "Location error"
-            // 🔴 removed New Haven fallback
-            deviceLatLng = null
-            streetCity = null
+            deviceLatLng = LatLng(41.3083, -72.9279)
+            streetCity = "New Haven"
         } finally {
             loading = false
         }
@@ -291,14 +288,7 @@ private fun HomeScreenContent(
 
             BrowseCategoriesSection(navController = navController, categories = categories)
             Spacer(modifier = Modifier.height(20.dp))
-            RecommendationsBlock(
-                ui = recoUi,
-                outerHorizontalPadding = 24.dp,
-                onPlaceClick = { placeId ->
-                    navController.navigate("place/$placeId")
-                }
-            )
-
+            RecommendationsBlock(ui = recoUi)
             Spacer(modifier = Modifier.height(20.dp))
         }
         FloatingActionButton(

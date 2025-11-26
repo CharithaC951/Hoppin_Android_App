@@ -301,7 +301,8 @@ class MainActivity : ComponentActivity() {
                                         selectedTypes = typeArg.split(',')
                                             .filter { it.isNotBlank() },
                                         selectedCategoryId = categoryId.takeIf { it != -1 },
-                                        center = deviceCenter, // now matches param in DiscoverListScreen
+                                        center = deviceCenter,
+                                        placesClient = placesClient, // use same client
                                         onBack = { navController.popBackStack() },
                                         onPlaceClick = { uiPlace ->
                                             navController.navigate("place/${uiPlace.id}")
@@ -310,7 +311,6 @@ class MainActivity : ComponentActivity() {
                                             navController.navigate("favorites")
                                         }
                                     )
-
                                 }
                                 composable(
                                     route = "place/{placeId}",
@@ -343,7 +343,6 @@ class MainActivity : ComponentActivity() {
                                 }
                                 composable("feed") {
                                     FeedScreen(
-                                        onBack = { navController.popBackStack() },
                                         onOpenItinerary = { itineraryId ->
                                             navController.navigate("itinerary/$itineraryId")
                                         }
@@ -477,7 +476,8 @@ class MainActivity : ComponentActivity() {
                                     selectedTypes = typeArg.split(',')
                                         .filter { it.isNotBlank() },
                                     selectedCategoryId = categoryId.takeIf { it != -1 },
-                                    center = deviceCenter, // now matches param in DiscoverListScreen
+                                    center = deviceCenter,
+                                    placesClient = placesClient, // same client
                                     onBack = { navController.popBackStack() },
                                     onPlaceClick = { uiPlace ->
                                         navController.navigate("place/${uiPlace.id}")
@@ -486,7 +486,6 @@ class MainActivity : ComponentActivity() {
                                         navController.navigate("favorites")
                                     }
                                 )
-
                             }
                             composable(
                                 route = "place/{placeId}",
@@ -519,7 +518,6 @@ class MainActivity : ComponentActivity() {
                             }
                             composable("feed") {
                                 FeedScreen(
-                                    onBack = { navController.popBackStack() },
                                     onOpenItinerary = { itineraryId ->
                                         navController.navigate("itinerary/$itineraryId")
                                     }
