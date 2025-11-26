@@ -8,7 +8,7 @@
         <item name="windowSplashScreenBackground">@color/splash_bg</item>
 
         <!-- Set the splash screen icon (your launcher icon) -->
-        <item name="windowSplashScreenAnimatedIcon">@drawable/hoppin_logo</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/hoppinlg</item>
         <!-- Use windowSplashScreenAnimatedIcon for static drawables too,
              it will be centered and sized appropriately.
              Alternatively, for static drawables you could use:
