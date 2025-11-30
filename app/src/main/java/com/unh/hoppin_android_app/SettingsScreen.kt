@@ -1,5 +1,7 @@
 package com.unh.hoppin_android_app
-
+import androidx.compose.foundation.Image
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
@@ -121,6 +123,19 @@ fun SettingsScreen(
             )
         }
     ) { innerPadding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding) // Move innerPadding here
+        ) {
+            // 1. The Background Image
+            Image(
+                painter = painterResource(id = R.drawable.hoppinbackground),
+                contentDescription = null,
+                contentScale = ContentScale.Crop, // Ensures image fills the screen
+                modifier = Modifier.fillMaxSize()
+            )
+            }
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -178,6 +193,7 @@ fun ChangePasswordSection(
                 .fillMaxWidth()
                 .border(1.dp, Color.LightGray, RoundedCornerShape(12.dp))
                 .clip(RoundedCornerShape(12.dp))
+                .background(Color.White)
                 .clickable { expanded = !expanded }
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -196,6 +212,7 @@ fun ChangePasswordSection(
                     .fillMaxWidth()
                     .padding(top = 8.dp)
                     .clip(RoundedCornerShape(12.dp))
+                    .background(Color.White)
                     .background(Color.LightGray.copy(alpha = 0.2f))
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -245,6 +262,8 @@ fun NotificationSettingsSection(
         modifier = Modifier
             .fillMaxWidth()
             .border(1.dp, Color.LightGray, RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color.White)
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
@@ -268,6 +287,7 @@ fun ContactUsSection() {
                 .fillMaxWidth()
                 .border(1.dp, Color.LightGray, RoundedCornerShape(12.dp))
                 .clip(RoundedCornerShape(12.dp))
+                .background(Color.White)
                 .clickable { expanded = !expanded }
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -286,11 +306,11 @@ fun ContactUsSection() {
                     .fillMaxWidth()
                     .padding(top = 8.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Color.LightGray.copy(alpha = 0.2f))
+                    .background(Color.White)
                     .padding(16.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Text("xyz@email.com", fontSize = 16.sp)
+                Text("hoppinsupport@email.com", fontSize = 16.sp)
             }
         }
     }
@@ -305,6 +325,7 @@ private fun TripItinerariesRow(
             .fillMaxWidth()
             .border(1.dp, Color.LightGray, RoundedCornerShape(12.dp))
             .clip(RoundedCornerShape(12.dp))
+            .background(Color.White)
             .clickable { onClick() }
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
