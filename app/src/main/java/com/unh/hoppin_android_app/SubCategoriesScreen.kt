@@ -103,15 +103,21 @@ fun SubCategoriesScreen(
                 modifier = Modifier.fillMaxSize()
             ) { page ->
                 val sub = subs.getOrNull(page)
-                val resolvedType = resolveTypeFromTitle(sub?.title.orEmpty())
 
-                // Tap pane -> go to Discover for that type
+                // 1) Try to resolve a type from the title ("Restaurants" -> "restaurant", etc.)
+                val rawType = resolveTypeFromTitle(sub?.title.orEmpty())
+
+                // 2) Only trust that type if it is actually valid for this category
+                val validTypesForCat = CategoryToTypes[catId].orEmpty()
+                val resolvedType = if (rawType in validTypesForCat) rawType else ""
+
+                // Tap pane -> go to Discover; if resolvedType is empty,
+                // Discover will rely on categoryId and show all types for that category.
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .clickable(enabled = resolvedType.isNotEmpty()) {
-                            // pass both type and categoryId so Discover can use either
-                            val encodedType = resolvedType // if you need Uri.encode later, do it
+                        .clickable {
+                            val encodedType = resolvedType // if you ever need Uri.encode, do it here
                             navController.navigate(
                                 "discover?type=$encodedType&categoryId=$catId"
                             )
@@ -211,60 +217,100 @@ fun SubCategoriesPreview() {
 /**
  * Maps pane titles to Places API / type strings.
  * If the title isn't in the known map, we fall back to snake_case.
+ *
+ * IMPORTANT: The actual type strings here should match the ones in CategoryToTypes.
  */
 private fun resolveTypeFromTitle(title: String): String {
     val map = mapOf(
-        // Category 1
+        // Category 1 – Attractions
         "Tourist Attraction" to "tourist_attraction",
+        "Tourist Attractions" to "tourist_attraction",
         "Museum" to "museum",
+        "Museums" to "museum",
         "Art Gallery" to "art_gallery",
+        "Art Galleries" to "art_gallery",
         "Park" to "park",
+        "Parks" to "park",
 
-        // Category 2
+        // Category 2 – Food & Drink
         "Restaurant" to "restaurant",
         "Restaurants" to "restaurant",
         "Bar" to "bar",
         "Bars" to "bar",
         "Cafe" to "cafe",
         "Cafes" to "cafe",
+        "Coffee Shop" to "cafe",
+        "Coffee Shops" to "cafe",
         "Bakery" to "bakery",
         "Bakeries" to "bakery",
 
-        // Category 3
+        // Category 3 – Entertainment
         "Movie Theater" to "movie_theater",
+        "Movie Theaters" to "movie_theater",
+        "Cinema" to "movie_theater",
+        "Cinemas" to "movie_theater",
         "Night Club" to "night_club",
+        "Night Clubs" to "night_club",
         "Bowling Alley" to "bowling_alley",
+        "Bowling Alleys" to "bowling_alley",
         "Casino" to "casino",
+        "Casinos" to "casino",
 
-        // Category 4
+        // Category 4 – Shopping
         "Shopping Mall" to "shopping_mall",
+        "Shopping Malls" to "shopping_mall",
         "Clothing Store" to "clothing_store",
+        "Clothing Stores" to "clothing_store",
         "Department Store" to "department_store",
+        "Department Stores" to "department_store",
         "Store" to "store",
+        "Stores" to "store",
         "Supermarket" to "supermarket",
+        "Supermarkets" to "supermarket",
 
-        // Category 5
+        // Category 5 – Stay & Relax
         "Spa" to "spa",
+        "Spas" to "spa",
         "Lodging" to "lodging",
+        "Hotel" to "lodging",
+        "Hotels" to "lodging",
         "Campground" to "campground",
+        "Campgrounds" to "campground",
 
-        // Category 6
+        // Category 6 – Wellness & Services
         "Gym" to "gym",
+        "Gyms" to "gym",
         "Pharmacy" to "pharmacy",
+        "Pharmacies" to "pharmacy",
         "Doctor" to "doctor",
+        "Doctors" to "doctor",
+        "Clinic" to "doctor",
+        "Clinics" to "doctor",
         "Beauty Salon" to "beauty_salon",
+        "Beauty Salons" to "beauty_salon",
 
-        // Category 7
+        // Category 7 – Emergency
         "Hospital" to "hospital",
+        "Hospitals" to "hospital",
         "Police" to "police",
+        "Police Station" to "police",
+        "Police Stations" to "police",
         "Fire Station" to "fire_station",
+        "Fire Stations" to "fire_station",
 
-        // Category 8
+        // Category 8 – Essentials
         "Post Office" to "post_office",
+        "Post Offices" to "post_office",
         "Bank" to "bank",
+        "Banks" to "bank",
         "ATM" to "atm",
+        "ATMs" to "atm",
         "Gas Station" to "gas_station",
-        "Car Repair" to "car_repair"
+        "Gas Stations" to "gas_station",
+        "Car Repair" to "car_repair",
+        "Car Repairs" to "car_repair",
+        "Mechanic" to "car_repair",
+        "Mechanics" to "car_repair"
     )
 
     return map[title] ?: title
