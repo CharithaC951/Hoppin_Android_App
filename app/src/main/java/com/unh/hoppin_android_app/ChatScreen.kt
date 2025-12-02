@@ -7,6 +7,10 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.ui.res.painterResource
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -20,6 +24,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -33,6 +39,8 @@ import com.unh.hoppin_android_app.ui.theme.DarkPurple
 import com.unh.hoppin_android_app.ui.theme.LightPurple
 import com.unh.hoppin_android_app.viewmodels.ChatViewModel
 import kotlin.collections.reversed
+import androidx.compose.foundation.Image
+import androidx.compose.ui.draw.shadow
 
 /**
  * ChatScreen
@@ -76,11 +84,22 @@ fun ChatScreen(
         },
         containerColor = Color.Transparent
     ) { paddingValues ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
+            Image(
+                painter = painterResource(id = R.drawable.hoppinbackground), // your image file
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        }
+        Column(
+            modifier = Modifier.fillMaxSize()
+        ) {
+
             LazyColumn(
                 modifier = Modifier
                     .weight(1f)
@@ -127,56 +146,58 @@ fun ChatScreen(
 fun MessageBubble(message: ChatMessage) {
     val isBot = message.author == Author.BOT
     val horizontalArrangement = if (isBot) Arrangement.Start else Arrangement.End
-    val bubbleColor = if (isBot) LightPurple else DarkPurple
+    val bubbleColor = if (isBot) Color.White else Color.Black
     val textColor = if (isBot) Color.Black else Color.White
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        horizontalArrangement = horizontalArrangement,
-        verticalAlignment = Alignment.Top
+    AnimatedVisibility(
+        visible = true,
+        enter = fadeIn() + slideInVertically(initialOffsetY = { it / 4 })
     ) {
-        if (isBot) {
-            Icon(
-                imageVector = Icons.Filled.SmartToy,
-                contentDescription = "Bot Avatar",
-                tint = Color.Gray,
-                modifier = Modifier.padding(end = 8.dp)
-            )
-        }
-
-        Column {
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(bubbleColor)
-                    .padding(horizontal = 16.dp, vertical = 10.dp)
-            ) {
-                Text(
-                    text = message.text,
-                    color = textColor,
-                    fontSize = 16.sp
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
+            horizontalArrangement = horizontalArrangement,
+            verticalAlignment = Alignment.Top
+        ) {
+            if (isBot) {
+                Icon(
+                    imageVector = Icons.Filled.SmartToy,
+                    contentDescription = "Bot Avatar",
+                    tint = Color.Cyan,
+                    modifier = Modifier.padding(end = 8.dp)
                 )
             }
 
-            if (message.isLoading) {
-                CircularProgressIndicator(
+            Column {
+                Box(
                     modifier = Modifier
-                        .padding(top = 8.dp)
-                        .size(24.dp),
-                    color = DarkPurple,
-                    strokeWidth = 2.dp
-                )
-            }
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(bubbleColor.copy(alpha = 0.85f))
+                        .padding(horizontal = 16.dp, vertical = 10.dp)) {
+                    Text(
+                        text = message.text,
+                        color = textColor,
+                        fontSize = 16.sp
+                    )
+                }
 
-            if (message.places.isNotEmpty()) {
-                PlacesList(places = message.places)
+                if (message.isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier
+                            .padding(top = 8.dp)
+                            .size(24.dp),
+                        color = Color.White,
+                        strokeWidth = 2.dp
+                    )
+                }
+
+                if (message.places.isNotEmpty()) {
+                    PlacesList(places = message.places)
+                }
             }
-        }
     }
 }
-
+}
 /**
  * PlacesList
  *
@@ -273,7 +294,7 @@ fun QuickReplies(replies: List<String>, onReplyClicked: (String) -> Unit) {
             Button(
                 onClick = { onReplyClicked(reply) },
                 shape = RoundedCornerShape(50),
-                colors = ButtonDefaults.buttonColors(containerColor = LightPurple)
+                colors = ButtonDefaults.buttonColors(containerColor = Color.White)
             ) {
                 Text(text = reply, color = Color.Black)
             }

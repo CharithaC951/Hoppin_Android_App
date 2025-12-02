@@ -72,7 +72,6 @@ fun TripItinerariesScreen(
                                 .fillMaxWidth()
                                 .padding(horizontal = 4.dp),
                             onClick = {
-                                // 🔴 This is where we navigate using the ID
                                 onOpenItinerary(itinerary.id)
                             }
                         ) {

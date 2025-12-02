@@ -43,6 +43,7 @@ import com.google.android.libraries.places.api.net.PlacesClient
 import com.unh.hoppin_android_app.ui.theme.Hoppin_Android_AppTheme
 import com.unh.hoppin_android_app.viewmodels.ChatViewModel
 import kotlinx.coroutines.launch
+import com.unh.hoppin_android_app.viewmodels.RecommendationViewModel
 
 const val USER_NAME_ARG = "Hopper"
 const val HOME_ROUTE_PATTERN = "Home/{$USER_NAME_ARG}"
@@ -439,7 +440,8 @@ class MainActivity : ComponentActivity() {
                                     HomeScreen(
                                         navController = navController,
                                         userName = userName,
-                                        placesApiKey = PLACES_API_KEY
+                                        placesApiKey = PLACES_API_KEY,
+                                        recoVm = recoVm
                                     )
                                 }
                                 composable("map") {
@@ -500,6 +502,7 @@ class MainActivity : ComponentActivity() {
                                         selectedCategoryId = categoryId.takeIf { it != -1 },
                                         center = deviceCenter,
                                         placesClient = placesClient,
+                                        recoVm = recoVm,   // 🔹 pass shared VM
                                         onBack = { navController.popBackStack() },
                                         onPlaceClick = { uiPlace ->
                                             navController.navigate("place/${uiPlace.id}")

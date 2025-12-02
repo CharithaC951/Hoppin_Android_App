@@ -1,6 +1,7 @@
 package com.unh.hoppin_android_app
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Geocoder
 import android.os.Looper
@@ -70,12 +71,14 @@ val categories = CategoriesRepository.allCategories()
 fun HomeScreen(
     navController: NavController,
     userName: String,
-    placesApiKey: String
+    placesApiKey: String,
+    recoVm: RecommendationViewModel
 ) {
     HomeScreenContent(
         navController = navController,
         userName = userName,
-        placesApiKey = placesApiKey
+        placesApiKey = placesApiKey,
+        recoVm = recoVm
     )
 }
 
@@ -97,8 +100,9 @@ fun HomeScreen(
 private fun HomeScreenContent(
     navController: NavController,
     userName: String,
-    placesApiKey: String
-) {
+    placesApiKey: String,
+    recoVm: RecommendationViewModel
+){
     val context = LocalContext.current
 
     // FusedLocationProviderClient used to fetch device location.
@@ -112,7 +116,7 @@ private fun HomeScreenContent(
     var locationError by remember { mutableStateOf<String?>(null) }  // error text for debugging / display
     var loading by remember { mutableStateOf(true) }                 // whether location fetch is in progress
 
-    val recoVm: RecommendationViewModel = viewModel()
+    //val recoVm: RecommendationViewModel = viewModel()
     val recoUi by recoVm.ui.collectAsState()
 
     /**
@@ -392,7 +396,7 @@ private suspend fun awaitOneLocationFix(
  * @return A compact "street, city" string or null on failure.
  */
 private suspend fun reverseGeocodeStreetCity(
-    context: android.content.Context,
+    context: Context,
     latLng: LatLng
 ): String? = withContext(Dispatchers.IO) {
     try {
