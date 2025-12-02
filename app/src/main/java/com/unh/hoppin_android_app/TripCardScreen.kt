@@ -141,7 +141,8 @@ fun TripCardScreen(
                     }
                 }
             )
-        }
+        },
+        containerColor = Color.Transparent
     ) { innerPadding ->
         Column(
             modifier = Modifier

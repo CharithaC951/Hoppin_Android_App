@@ -121,21 +121,9 @@ fun SettingsScreen(
                     titleContentColor = MaterialTheme.colorScheme.onBackground
                 )
             )
-        }
+        },
+        containerColor = Color.Transparent
     ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding) // Move innerPadding here
-        ) {
-            // 1. The Background Image
-            Image(
-                painter = painterResource(id = R.drawable.hoppinbackground),
-                contentDescription = null,
-                contentScale = ContentScale.Crop, // Ensures image fills the screen
-                modifier = Modifier.fillMaxSize()
-            )
-            }
         Column(
             modifier = Modifier
                 .fillMaxSize()

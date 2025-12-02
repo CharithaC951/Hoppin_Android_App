@@ -1,14 +1,17 @@
 package com.unh.hoppin_android_app
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -23,12 +26,6 @@ import kotlin.math.roundToInt
 
 /**
  * RecommendationsBlock
- *
- * High-level composable that renders the "Recommendations" section used on the Home screen.
- *
- * @param ui The UI state object produced by the RecommendationViewModel.
- * @param outerHorizontalPadding Padding applied around the list in the parent layout.
- * @param onPlaceClick Called when a card is tapped, with the place's ID.
  */
 @Composable
 fun RecommendationsBlock(
@@ -95,72 +92,92 @@ private fun FullWidthRecommendationCard(
     distanceMeters: Double,
     bitmap: android.graphics.Bitmap?,
     width: Dp,
-    imageHeight: Dp = 260.dp,
+    imageHeight: Dp = 220.dp,
     onClick: () -> Unit = {}
 ) {
-    Card(
-        modifier = Modifier.width(width),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        onClick = onClick
+    // Outer gradient frame
+    Box(
+        modifier = Modifier
+            .width(width)
+            .background(
+                brush = Brush.linearGradient(
+                    colors = listOf(
+                        Color(0xFFFFC857), // softer golden
+                        Color(0xFFF7B267)  // warm peach
+                    )
+                ),
+                shape = RoundedCornerShape(20.dp)
+            )
+            .padding(2.dp) // gradient border thickness
     ) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 10.dp)
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = Color(0xF9FFFDF8) // soft warm off-white
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+            onClick = onClick
         ) {
-            if (categoryTitle.isNotBlank()) {
-                Text(
-                    text = categoryTitle,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Spacer(Modifier.height(2.dp))
-            }
-
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(imageHeight)
-                .padding(horizontal = 14.dp, vertical = 10.dp)
-        ) {
-            if (bitmap != null) {
-                Image(
-                    bitmap = bitmap.asImageBitmap(),
-                    contentDescription = null,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clip(MaterialTheme.shapes.medium),
-                    contentScale = ContentScale.Crop
-                )
-            } else {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clip(MaterialTheme.shapes.medium),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("No photo", style = MaterialTheme.typography.bodyMedium)
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 12.dp)
+            ) {
+                if (categoryTitle.isNotBlank()) {
+                    Text(
+                        text = categoryTitle,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(Modifier.height(2.dp))
                 }
+
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
 
-            DistanceChip(
-                meters = distanceMeters,
+            Box(
                 modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(10.dp)
-            )
+                    .fillMaxWidth()
+                    .height(imageHeight)
+                    .padding(horizontal = 14.dp, vertical = 10.dp)
+            ) {
+                if (bitmap != null) {
+                    Image(
+                        bitmap = bitmap.asImageBitmap(),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(16.dp)),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(16.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("No photo", style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+
+                DistanceChip(
+                    meters = distanceMeters,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(10.dp)
+                )
+            }
+
+            Spacer(Modifier.height(10.dp))
         }
-        Spacer(Modifier.height(8.dp))
     }
 }
 
@@ -179,16 +196,15 @@ private fun DistanceChip(meters: Double, modifier: Modifier = Modifier) {
 
     Surface(
         modifier = modifier,
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
-        shape = MaterialTheme.shapes.small,
-        shadowElevation = 2.dp,
-        tonalElevation = 2.dp,
-        border = ButtonDefaults.outlinedButtonBorder
+        color = Color.White.copy(alpha = 0.92f),
+        shape = RoundedCornerShape(999.dp),
+        shadowElevation = 4.dp,
+        tonalElevation = 0.dp
     ) {
         Text(
             text = text,
             style = MaterialTheme.typography.labelMedium,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
         )
     }
 }

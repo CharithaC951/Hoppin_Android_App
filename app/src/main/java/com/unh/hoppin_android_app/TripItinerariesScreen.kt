@@ -13,6 +13,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -45,7 +46,8 @@ fun TripItinerariesScreen(
             FloatingActionButton(onClick = { showCreateDialog = true }) {
                 Icon(Icons.Filled.Add, contentDescription = "Create itinerary")
             }
-        }
+        },
+        containerColor = Color.Transparent
     ) { padding ->
         Box(
             modifier = Modifier

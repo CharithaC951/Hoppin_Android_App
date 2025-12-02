@@ -30,6 +30,7 @@ import android.widget.Toast
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.graphics.Color
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import com.google.firebase.ktx.Firebase
@@ -151,7 +152,8 @@ fun ItineraryDetailScreen(
                     }
                 }
             )
-        }
+        },
+        containerColor = Color.Transparent
     ) { padding ->
 
                 Box(
