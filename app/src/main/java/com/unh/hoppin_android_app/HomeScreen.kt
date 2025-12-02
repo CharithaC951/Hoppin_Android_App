@@ -11,6 +11,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
@@ -21,7 +22,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -44,6 +44,7 @@ import kotlinx.coroutines.withContext
 import java.util.Locale
 import kotlin.coroutines.resume
 import androidx.compose.material.icons.filled.SmartToy
+import androidx.compose.ui.graphics.Color
 
 val gradientColors = listOf(
     Color(0xFFFF930F),
@@ -303,21 +304,13 @@ private fun HomeScreenContent(
             )
             Spacer(modifier = Modifier.height(20.dp))
         }
-        FloatingActionButton(
-            onClick = {
-                navController.navigate("chat")
-            },
+        ChatBubbleButton(
+            onClick = { navController.navigate("chat") },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(16.dp),
-            containerColor = Color(0xFF6B4D9C)
-        ) {
-            Icon(
-                imageVector = Icons.Default.SmartToy,
-                contentDescription = "Open Chatbot",
-                tint = Color.White
-            )
-        }
+                .padding(end = 20.dp, bottom = 24.dp)
+        )
+
     }
 }
 
@@ -425,3 +418,37 @@ private suspend fun reverseGeocodeStreetCity(
         null
     }
 }
+
+@Composable
+fun ChatBubbleButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier
+            .clickable { onClick() },
+        shape = RoundedCornerShape(50),
+        color = Color(0xFF2bb7c4).copy(alpha = 0.95f),
+        shadowElevation = 10.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 18.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = Color.White,
+                shadowElevation = 4.dp
+            ) {
+                Icon(
+                    imageVector = Icons.Default.SmartToy,
+                    contentDescription = "Chatbot",
+                    tint = Color(color = 0xFFF4b91D),
+                    modifier = Modifier.padding(8.dp)
+                )
+            }
+        }
+    }
+}
+

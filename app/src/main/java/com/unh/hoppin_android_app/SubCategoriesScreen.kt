@@ -42,10 +42,7 @@ import kotlin.collections.getOrNull
 fun SubCategoriesScreen(
     navController: NavController,
     catId: Int,
-    center: LatLng = LatLng(41.31, -72.93), // kept if you need later, not used here
-    perCategory: Int = 20
 ) {
-    val context = LocalContext.current
 
     val category: Category? = remember(catId) { CategoriesRepository.getCategoryById(catId) }
     val subs: List<SubCategory> = remember(catId) { CategoriesRepository.subCategoriesOf(catId) }
@@ -68,7 +65,8 @@ fun SubCategoriesScreen(
                     }
                 }
             )
-        }
+        },
+        containerColor = Color.Transparent
     ) { padding ->
         Column(
             modifier = Modifier

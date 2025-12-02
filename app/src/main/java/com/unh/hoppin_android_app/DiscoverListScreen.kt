@@ -342,7 +342,8 @@ fun DiscoverListScreen(
                 )
             )
         },
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+        containerColor = Color.Transparent
     ) { inner ->
         when {
             center == null -> Box(

@@ -78,10 +78,11 @@ fun ChatScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
-                backgroundColor = Color.White,
+                backgroundColor = Color.Transparent,
                 elevation = 4.dp
             )
-        }
+        },
+        containerColor = Color.Transparent
     ) { paddingValues ->
         Box(
             modifier = Modifier
