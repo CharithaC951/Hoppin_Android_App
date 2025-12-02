@@ -93,6 +93,7 @@ class MainActivity : ComponentActivity() {
                         val context = this@MainActivity
                         val activity = this@MainActivity
 
+                        val recoVm: RecommendationViewModel = viewModel()
                         // Shared PlacesClient
                         val placesClient: PlacesClient = remember {
                             Places.createClient(context)
@@ -257,6 +258,7 @@ class MainActivity : ComponentActivity() {
                                         HomeScreen(
                                             navController = navController,
                                             userName = userName,
+                                            recoVm = recoVm,
                                             placesApiKey = PLACES_API_KEY
                                         )
                                     }
@@ -322,6 +324,7 @@ class MainActivity : ComponentActivity() {
                                             onPlaceClick = { uiPlace ->
                                                 navController.navigate("place/${uiPlace.id}")
                                             },
+                                            recoVm = recoVm,
                                             onOpenFavorites = {
                                                 navController.navigate("favorites")
                                             }
