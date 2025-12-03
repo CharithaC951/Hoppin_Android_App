@@ -1,5 +1,6 @@
 package com.unh.hoppin_android_app
 
+import android.R.attr.subtitle
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -21,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.unh.hoppin_android_app.ui.theme.cardColor
 import com.unh.hoppin_android_app.viewmodels.CommonReview
 import com.unh.hoppin_android_app.viewmodels.FeedViewModel
 import com.unh.hoppin_android_app.viewmodels.SharedItinerary
@@ -128,8 +130,7 @@ fun FeedScreen(
                     if (uiState.itineraries.isNotEmpty()) {
                         item {
                             SectionHeader(
-                                title = "Shared Trips",
-                                subtitle = "Curated itineraries from the Hoppin community"
+                                title = "Shared Trips"
                             )
                         }
                     }
@@ -142,7 +143,6 @@ fun FeedScreen(
 
                         SharedItineraryCard(
                             itinerary = itinerary,
-                            reviews = reviewsForTrip,
                             onOpen = { onOpenItinerary(itinerary.id) }
                         )
                     }
@@ -163,8 +163,7 @@ fun FeedScreen(
                         Spacer(Modifier.height(16.dp))
 
                         SectionHeader(
-                            title = "All Community Reviews",
-                            subtitle = "Latest reviews across all places in Hoppin"
+                            title = "All Community Reviews"
                         )
                     }
 
@@ -190,20 +189,13 @@ fun FeedScreen(
 
 @Composable
 private fun SectionHeader(
-    title: String,
-    subtitle: String
+    title: String
 ) {
     Column {
         Text(
             text = title,
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.SemiBold
-        )
-        Spacer(Modifier.height(2.dp))
-        Text(
-            text = subtitle,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
@@ -245,14 +237,14 @@ private fun EmptyStateCard(
 @Composable
 private fun SharedItineraryCard(
     itinerary: SharedItinerary,
-    reviews: List<CommonReview>,
     onOpen: () -> Unit
 ) {
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = 4.dp),
-        onClick = onOpen
+        onClick = onOpen,
+        colors = CardDefaults.elevatedCardColors(Color(0xfff8f0e3))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             // Header: name + meta
@@ -291,13 +283,15 @@ private fun SharedItineraryCard(
                 }
 
                 AssistChip(
+                    colors = AssistChipDefaults.assistChipColors(Color(0xff023C85)),
                     onClick = onOpen,
-                    label = { Text("View trip") },
+                    label = { Text("View trip",color = Color.White) },
                     leadingIcon = {
                         Icon(
                             imageVector = Icons.Filled.ArrowForward,
                             contentDescription = null,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(16.dp),
+                            tint = Color.White
                         )
                     }
                 )
@@ -312,41 +306,6 @@ private fun SharedItineraryCard(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-
-            Spacer(Modifier.height(12.dp))
-
-            Divider()
-
-            Spacer(Modifier.height(8.dp))
-
-            Text(
-                text = if (reviews.isEmpty()) "No reviews yet" else "Recent reviews from this trip",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary
-            )
-
-            Spacer(Modifier.height(6.dp))
-
-            if (reviews.isEmpty()) {
-                Text(
-                    text = "Be the first to review places in this trip.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            } else {
-                reviews.forEachIndexed { index, review ->
-                    ReviewSnippetRow(review = review)
-                    if (index != reviews.lastIndex) {
-                        Spacer(Modifier.height(6.dp))
-                        Divider(
-                            modifier = Modifier.padding(vertical = 4.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
-                        )
-                    } else {
-                        Spacer(Modifier.height(6.dp))
-                    }
-                }
-            }
         }
     }
 }
@@ -356,7 +315,8 @@ private fun ReviewFeedCard(review: CommonReview) {
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 3.dp)
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 3.dp),
+        colors = CardDefaults.elevatedCardColors(cardColor)
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
             ReviewSnippetRow(review = review)
@@ -380,22 +340,24 @@ private fun ReviewSnippetRow(review: CommonReview) {
                     Icon(
                         imageVector = if (filled) Icons.Filled.Star else Icons.Outlined.StarBorder,
                         contentDescription = null,
-                        tint = if (filled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-                        modifier = Modifier.size(16.dp)
+                        tint = if (filled) Color(0xff023C85) else MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.size(18.dp) // slightly bigger stars
                     )
                 }
             }
 
+            // Reviewer name — bigger
             Text(
                 text = review.author.ifBlank { "Anonymous" },
-                style = MaterialTheme.typography.bodySmall,
-                fontWeight = FontWeight.Medium
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold
             )
 
+            // Place name — bigger
             if (review.placeName.isNotBlank()) {
                 Text(
                     text = "• " + review.placeName,
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -403,26 +365,29 @@ private fun ReviewSnippetRow(review: CommonReview) {
             }
         }
 
+        // Review text — bigger
         if (review.text.isNotBlank()) {
             Spacer(Modifier.height(4.dp))
             Text(
                 text = review.text,
-                style = MaterialTheme.typography.bodySmall,
-                maxLines = 3,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 4,
                 overflow = TextOverflow.Ellipsis
             )
         }
 
+        // Timestamp — slightly bigger but still subtle
         review.createdAt?.toDate()?.let { date ->
             Spacer(Modifier.height(4.dp))
             Text(
                 text = formatShortDateTime(date),
-                style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
 }
+
 
 /* -------------------- Date helpers -------------------- */
 
