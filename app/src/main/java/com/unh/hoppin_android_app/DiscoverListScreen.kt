@@ -507,22 +507,22 @@ private fun FilterBar(
         shape = RoundedCornerShape(16.dp),
         tonalElevation = 2.dp,
         modifier = Modifier.fillMaxWidth(),
-        color = Color(0xFFFFF8E1)
+        color = Color.Transparent
     ) {
         LazyRow(
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            val selectedColor = Color(0xFFFFB300)
-            val unselectedColor = Color(0x26FFA000)
+            val selectedColor = Color(0xFF023c85)
+            val unselectedColor = Color(0xff45c2db)
 
             @Composable
             fun chipColors(selected: Boolean) = FilterChipDefaults.filterChipColors(
-                selectedContainerColor = if (selected) selectedColor else Color.Transparent,
-                selectedLabelColor = Color.Black,
+                selectedContainerColor = if (selected) selectedColor else unselectedColor,
+                selectedLabelColor = Color.White,
                 containerColor = if (!selected) unselectedColor else selectedColor,
-                labelColor = Color.Black
+                labelColor = Color.White
             )
 
             item {
@@ -765,7 +765,7 @@ fun PlaceCardMinimal(
             .clickable { onClick() },
         shape = RoundedCornerShape(18.dp),
         elevation = CardDefaults.cardElevation(4.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFFDE7))
+        colors = CardDefaults.cardColors(Color(0xfff8f0e3))
     ) {
         Column {
             if (place.photo != null) {

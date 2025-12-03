@@ -121,6 +121,7 @@ private fun FavoriteCard(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
         elevation = CardDefaults.cardElevation(4.dp),
+        colors = CardDefaults.elevatedCardColors(Color(0xfff8f0e3)),
         onClick = onClick
     ) {
         Column {
