@@ -72,7 +72,6 @@ fun AppBottomBar(
     // Outer background (pink strip)
     Box(modifier = Modifier
             .fillMaxWidth()
-            .background(Color(color = 0xFFF4b91D))
             .padding(horizontal = 20.dp, vertical = 16.dp), // EXPANDED HEIGHT
         contentAlignment = Alignment.Center
     ) {

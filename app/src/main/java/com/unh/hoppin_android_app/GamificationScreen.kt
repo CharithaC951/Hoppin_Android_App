@@ -60,7 +60,8 @@ fun GamificationScreen(
     val scrollState = rememberScrollState()
 
     Scaffold(
-        containerColor = Color(0xFFFFFDE7), // 🌼 pale warm yellow background
+        containerColor = Color.Transparent,
+        // 🌼 pale warm yellow background
         topBar = {
             TopAppBar(
                 title = { Text("Gamification") },
@@ -70,7 +71,7 @@ fun GamificationScreen(
                     }
                 }
             )
-        }
+        },
     ) { inner ->
         Column(
             modifier = Modifier

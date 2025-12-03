@@ -53,7 +53,7 @@ fun LoginScreen(navController: NavController) {
     Box(modifier = Modifier.fillMaxSize()) {
         // UPDATE: Using your specific background image name
         Image(
-            painter = painterResource(id = R.drawable.hoppinbackground),
+            painter = painterResource(id = R.drawable.test_bg),
             contentDescription = "Background",
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop
