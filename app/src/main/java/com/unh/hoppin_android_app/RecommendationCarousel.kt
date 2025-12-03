@@ -21,6 +21,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.unh.hoppin_android_app.ui.theme.cardColor
 import com.unh.hoppin_android_app.viewmodels.RecommendationsUiState
 import kotlin.math.roundToInt
 
@@ -114,7 +115,7 @@ private fun FullWidthRecommendationCard(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(18.dp),
             colors = CardDefaults.cardColors(
-                containerColor = Color(0xF9FFFDF8) // soft warm off-white
+                containerColor = cardColor
             ),
             elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
             onClick = onClick

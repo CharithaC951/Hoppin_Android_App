@@ -8,6 +8,7 @@ import android.os.Looper
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -288,20 +289,9 @@ private fun HomeScreenContent(
                         Icon(
                             imageVector = Icons.Default.Person,
                             contentDescription = "Profile",
-                            tint = Color.White,
+                            tint = Color(0xff023C85),
                             modifier = Modifier
                                 .padding(8.dp)
-                                .graphicsLayer(alpha = 0.99f)
-                                .drawWithCache {
-                                    val brush = Brush.linearGradient(gradientColors)
-                                    onDrawWithContent {
-                                        drawContent()
-                                        drawRect(
-                                            brush = brush,
-                                            blendMode = BlendMode.SrcIn
-                                        )
-                                    }
-                                }
                         )
                     }
                     Spacer(modifier = Modifier.width(12.dp))
@@ -316,7 +306,7 @@ private fun HomeScreenContent(
                         Text(
                             text = "Ready to Hoppin ?",
                             fontSize = 16.sp,
-                            color = Color.Gray
+                            color = Color(0xff023C85)
                         )
                     }
                 }
@@ -377,21 +367,37 @@ private fun HomeScreenContent(
             )
             Spacer(modifier = Modifier.height(20.dp))
         }
-        FloatingActionButton(
-            onClick = {
-                navController.navigate("chat")
-            },
+        Box(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(16.dp),
-            containerColor = Color(0xFF6B4D9C)
+                .padding(16.dp)
         ) {
-            Icon(
-                imageVector = Icons.Default.SmartToy,
-                contentDescription = "Open Chatbot",
-                tint = Color.White
-            )
+            // Outer blue circle (background)
+            Box(
+                modifier = Modifier
+                    .size(64.dp)
+                    .background(
+                        color = Color.Transparent, // Teal-blue outer ring
+                        shape = CircleShape
+                    )
+                    .padding(6.dp) // Creates the ring effect
+            ) {
+                // Inner yellow circle with icon & click action
+                FloatingActionButton(
+                    onClick = { navController.navigate("chat") },
+                    containerColor = Color(0xff023C85),  // Yellow inner circle
+                    shape = CircleShape,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.SmartToy,
+                        contentDescription = "Chatbot",
+                        tint = Color.White
+                    )
+                }
+            }
         }
+
     }
 }
 
