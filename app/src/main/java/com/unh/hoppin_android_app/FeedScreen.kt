@@ -40,18 +40,13 @@ fun FeedScreen(
 
     Scaffold(
         topBar = {
-            CenterAlignedTopAppBar(
+            TopAppBar(
                 title = {
                     Column {
                         Text(
                             text = "Community Feed",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            text = "Trips & reviews from Hoppin users",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 },
@@ -129,43 +124,6 @@ fun FeedScreen(
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    // -------------------- Header --------------------
-                    item {
-                        Column {
-                            Text(
-                                text = "Discover Trips from the Community",
-                                style = MaterialTheme.typography.headlineSmall,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                text = "See what others are exploring nearby and get inspired for your next outing.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-
-                            val tripCount = uiState.itineraries.size
-                            val reviewCount = uiState.reviews.size
-                            if (tripCount > 0 || reviewCount > 0) {
-                                Spacer(Modifier.height(8.dp))
-                                Text(
-                                    text = buildString {
-                                        append("Community activity: ")
-                                        append("$tripCount shared trip")
-                                        if (tripCount != 1) append("s")
-                                        append(" · ")
-                                        append("$reviewCount review")
-                                        if (reviewCount != 1) append("s")
-                                    },
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-
-                            Spacer(Modifier.height(12.dp))
-                        }
-                    }
-
                     // -------------------- Shared itineraries section label --------------------
                     if (uiState.itineraries.isNotEmpty()) {
                         item {

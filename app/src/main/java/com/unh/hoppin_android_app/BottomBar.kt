@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.unh.hoppin_android_app.ui.theme.cardColor
 
 @Composable
 fun AppBottomBar(
@@ -81,7 +82,7 @@ fun AppBottomBar(
                 .fillMaxWidth()
                 .padding(horizontal = 2.dp) // WIDER white pill
                 .height(80.dp),      // TALLER bar
-            color = Color.White,
+            color = cardColor,
             shape = RoundedCornerShape(26.dp), // MORE ROUNDING
             shadowElevation = 10.dp
         ) {

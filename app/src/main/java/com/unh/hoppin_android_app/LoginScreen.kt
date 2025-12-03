@@ -175,7 +175,7 @@ private fun SignInUI(
     ) {
         // Logo
         Image(
-            painter = painterResource(id = R.drawable.hoppin_logo),
+            painter = painterResource(id = R.drawable.hoppinlg),
             contentDescription = "Hoppin Logo",
             modifier = Modifier.size(width = 200.dp, height = 200.dp)
         )
@@ -277,7 +277,7 @@ private fun SignInUI(
                 },
                 modifier = Modifier.fillMaxWidth().height(50.dp),
                 shape = RoundedCornerShape(30.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF004D40))
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF023C85))
             ) {
                 Text("Sign in", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
@@ -338,7 +338,7 @@ private fun SignInUI(
             modifier = Modifier.fillMaxWidth().height(50.dp),
             shape = RoundedCornerShape(30.dp),
             // Changed color to Cyan to match screenshot
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF004D40))
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF023C85))
         ) {
             Text("Sign up", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
         }
@@ -534,21 +534,12 @@ private fun CreateAccountUI(onNavigateBack: () -> Unit) {
                     modifier = Modifier.fillMaxWidth().height(50.dp),
                     shape = RoundedCornerShape(30.dp),
                     // Matched the button color to your Login Screen (Cyan)
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF004D40))
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xff023C85))
                 ) {
                     Text("Create Account", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 }
             }
-            Spacer(modifier = Modifier.weight(1f))
-
-            // Added a background box or improved text color for the terms text
-            Box(
-                modifier = Modifier
-                    .background(Color.White, RoundedCornerShape(10.dp))
-                    .padding(8.dp)
-            ) {
-                TermsAndPrivacyText()
-            }
+            TermsAndPrivacyText()
         }
     }
 }

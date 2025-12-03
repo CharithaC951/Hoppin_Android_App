@@ -2,17 +2,21 @@ package com.unh.hoppin_android_app
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -20,13 +24,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
+import com.unh.hoppin_android_app.ui.theme.cardColor
 
 /**
  * Represents a single category model.
- *
- * @param id Unique identifier for the category.
- * @param title Display title of the category.
- * @param image Drawable resource ID representing the category icon.
  */
 data class Category(
     val id: Int,
@@ -35,14 +36,8 @@ data class Category(
 )
 
 /**
- * Displays an individual category item with an icon and title.
- *
- * When clicked, it navigates to a subcategory screen
- * using the given [NavController].
- *
- * @param navController Used to handle navigation actions.
- * @param category The category data to display.
- * @param modifier Optional modifier for layout customization.
+ * Single category pill (icon + label).
+ * Navigation behaviour unchanged.
  */
 @Composable
 fun CategoryItem(
@@ -51,57 +46,59 @@ fun CategoryItem(
     modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = modifier
-            .width(80.dp)
-            .clickable {
-                // Navigate to the subcategory screen with the category ID
-                navController.navigate("sub/${category.id}")
-            },
+        modifier = modifier.width(72.dp),          // small enough so 4 fit in the card
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Box(
-            modifier = Modifier
-                .size(80.dp)
-                .background(
-                    color = Color.Transparent,
-                    shape = RoundedCornerShape(12.dp)
-                ),
-            contentAlignment = Alignment.Center
+        Surface(
+            modifier = Modifier.size(60.dp),
+            shape = RoundedCornerShape(18.dp),
+            color = Color.White.copy(alpha = 0.9f),
+            shadowElevation = 0.dp,
+            onClick = { navController.navigate("sub/${category.id}") }
         ) {
-            Image(
-                painter = painterResource(category.image),
-                contentDescription = null,
-                modifier = Modifier.size(48.dp)
-            )
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    painter = painterResource(category.image),
+                    contentDescription = null,
+                    modifier = Modifier.size(32.dp)
+                )
+            }
         }
 
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
         Text(
             text = category.title,
-            style = MaterialTheme.typography.bodySmall,
+            style = MaterialTheme.typography.labelMedium,
+            fontSize = 12.sp,
             color = Color.Black,
-            maxLines = 1 // Ensures text doesn’t overflow
+            maxLines = 1
         )
     }
 }
 
+
 /**
- * A horizontally scrollable section displaying multiple categories.
+ * BrowseCategoriesSection
  *
- * Includes a section title ("Categories") and a [LazyRow]
- * of clickable [CategoryItem]s.
- *
- * @param navController Used to handle navigation when a category is selected.
- * @param categories The list of categories to display.
+ * Heading is outside the white card.
+ * White card margin/width matches Recommendations card.
  */
 @Composable
 fun BrowseCategoriesSection(
     navController: NavController,
     categories: List<Category>
 ) {
+    val screenWidthDp = LocalConfiguration.current.screenWidthDp.dp
+    val outerHorizontalPadding = 24.dp           // match Recommendations
+    val cardWidth = screenWidthDp - (outerHorizontalPadding * 2)
+
     Column(modifier = Modifier.fillMaxWidth()) {
-        // Section header
+
+        // Heading outside the card
         Text(
             text = "Categories",
             style = MaterialTheme.typography.headlineSmall,
@@ -111,13 +108,54 @@ fun BrowseCategoriesSection(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
         )
 
-        // Horizontal list of category items
-        LazyRow(
+        // Center the card with same width as Recommendations
+        Box(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            contentAlignment = Alignment.Center
         ) {
-            items(categories) { category ->
-                CategoryItem(navController = navController, category = category)
+            Box(
+                modifier = Modifier
+                    .width(cardWidth)
+                    .background(
+                        brush = Brush.linearGradient(
+                            colors = listOf(
+                                Color(0xFFFFC857),
+                                Color(0xFFF7B267)
+                            )
+                        ),
+                        shape = RoundedCornerShape(20.dp)
+                    )
+                    .padding(2.dp) // gradient border
+            ) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = cardColor
+                    ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 16.dp, horizontal = 16.dp)
+                    ) {
+                        // Scrollable row; with width 72dp & spacing, 4 fit inside the card
+                        LazyRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            contentPadding = PaddingValues(horizontal = 4.dp)
+                        ) {
+                            items(categories) { category ->
+                                CategoryItem(
+                                    navController = navController,
+                                    category = category
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -127,12 +165,10 @@ fun BrowseCategoriesSection(
 @Composable
 fun BrowseCategoriesPreview() {
     val mockCategories = listOf(
-        Category(1, "Title 1", R.drawable.binoculars),
-        Category(2, "Title 2", R.drawable.binoculars),
-        Category(3, "Title 3", R.drawable.binoculars),
-        Category(4, "Title 4", R.drawable.binoculars),
-        Category(5, "Title 5", R.drawable.binoculars),
-        Category(6, "Title 6", R.drawable.binoculars)
+        Category(1, "Wellbeing", R.drawable.binoculars),
+        Category(2, "Emergency", R.drawable.binoculars),
+        Category(3, "Services", R.drawable.binoculars),
+        Category(4, "Explore", R.drawable.binoculars)
     )
 
     val navController = rememberNavController()
@@ -140,7 +176,7 @@ fun BrowseCategoriesPreview() {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.White)
+            .background(Color(0xFFEDEDED))
     ) {
         Spacer(modifier = Modifier.height(20.dp))
         BrowseCategoriesSection(

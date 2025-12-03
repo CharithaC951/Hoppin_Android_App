@@ -155,7 +155,7 @@ fun SettingsScreen(
             Button(
                 onClick = { settingsViewModel.logOut() },
                 shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xff023C85)),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp)
