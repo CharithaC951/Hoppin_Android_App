@@ -88,14 +88,7 @@ fun ChatScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-        ) {
-            Image(
-                painter = painterResource(id = R.drawable.hoppinbackground), // your image file
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-        }
+        )
         Column(
             modifier = Modifier.fillMaxSize()
         ) {

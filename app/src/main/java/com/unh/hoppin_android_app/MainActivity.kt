@@ -74,7 +74,7 @@ class MainActivity : ComponentActivity() {
                 // Global background image for the entire app
                 Box(modifier = Modifier.fillMaxSize()) {
                     Image(
-                        painter = painterResource(id = R.drawable.app_bg),
+                        painter = painterResource(id = R.drawable.test_bg),
                         contentDescription = null,
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop

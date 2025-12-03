@@ -266,13 +266,7 @@ private fun HomeScreenContent(
     /* ----------------------------- UI ----------------------------- */
 
     Box(modifier = Modifier.fillMaxSize()) {
-        Image(
-            painter = painterResource(R.drawable.hoppinbackground),
-            contentDescription = "Background image",
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize(),
-            alpha = 0.2f
-        )
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
