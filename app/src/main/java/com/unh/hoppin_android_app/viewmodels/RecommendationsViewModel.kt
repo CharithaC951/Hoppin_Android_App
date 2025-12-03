@@ -171,7 +171,7 @@ class RecommendationViewModel : ViewModel() {
         center: LatLng,
         categories: List<Category>,
         radiusMeters: Double = 1500.0,
-        maxResults: Int = 60,
+        maxResults: Int = 40,
         perCategory: Int = 4,
         apiKey: String? = null,
         fetchThumbnails: Boolean = true

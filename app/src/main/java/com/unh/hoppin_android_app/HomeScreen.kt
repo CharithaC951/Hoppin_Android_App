@@ -11,10 +11,10 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -31,7 +32,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.google.android.gms.location.*
 import com.google.android.gms.maps.model.LatLng
@@ -43,8 +43,12 @@ import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import java.util.Locale
 import kotlin.coroutines.resume
-import androidx.compose.material.icons.filled.SmartToy
-import androidx.compose.ui.graphics.Color
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.math.sqrt
+
+/* ----------------------------- Gradient & Categories ----------------------------- */
 
 val gradientColors = listOf(
     Color(0xFFFF930F),
@@ -57,15 +61,38 @@ val gradientColors = listOf(
  */
 val categories = CategoriesRepository.allCategories()
 
+/* ----------------------------- Home location cache ----------------------------- */
+
+private const val HOME_LOCATION_CACHE_MAX_AGE_MS = 5 * 60 * 1000L // 5 minutes
+
+private object HomeLocationCache {
+    var lastLatLng: LatLng? = null
+    var lastAddress: String? = null
+    var lastTimestamp: Long = 0L
+
+    fun isFresh(): Boolean {
+        val latLng = lastLatLng ?: return false
+        val age = System.currentTimeMillis() - lastTimestamp
+        return age in 0..HOME_LOCATION_CACHE_MAX_AGE_MS
+    }
+
+    fun update(latLng: LatLng, address: String?) {
+        lastLatLng = latLng
+        lastAddress = address
+        lastTimestamp = System.currentTimeMillis()
+    }
+}
+
+/* ----------------------------- User name cache ----------------------------- */
+
+private object UserNameCache {
+    var cached: String? = null
+}
+
+/* ----------------------------- Public Home entry ----------------------------- */
+
 /**
  * Public entry point for the Home screen.
- *
- * This small wrapper exists so callers (NavHost) can pass navigation, username,
- * and the Places API key explicitly.
- *
- * @param navController Navigation controller used to route to other screens.
- * @param userName Display name used in the greeting.
- * @param placesApiKey API key string forwarded to recommendation loader.
  */
 @Composable
 fun HomeScreen(
@@ -82,28 +109,24 @@ fun HomeScreen(
     )
 }
 
-/**
- * The main Home screen content.
- *
- * Responsibilities:
- *  - Request and display device location
- *  - Show a top greeting row with profile and quick map action
- *  - Render category row and recommendations block
- *  - Display a floating chat action button
- *
- * Notes:
- *  - Location permission handling is simplified inside rememberLocationPermissionState().
- *  - Reverse geocoding runs off the main thread.
- *  - RecommendationViewModel is invoked when a device location is available.
- */
+/* ----------------------------- Home content ----------------------------- */
+
 @Composable
 private fun HomeScreenContent(
     navController: NavController,
     userName: String,
     placesApiKey: String,
     recoVm: RecommendationViewModel
-){
+) {
     val context = LocalContext.current
+
+    // Cache the display name the first time we see it (so it never changes mid-session)
+    val displayName by remember {
+        mutableStateOf(
+            UserNameCache.cached
+                ?: userName.also { if (it.isNotBlank()) UserNameCache.cached = it }
+        )
+    }
 
     // FusedLocationProviderClient used to fetch device location.
     val fused = remember { LocationServices.getFusedLocationProviderClient(context) }
@@ -113,61 +136,112 @@ private fun HomeScreenContent(
     // Local UI state
     var deviceLatLng by remember { mutableStateOf<LatLng?>(null) }   // device coordinates
     var streetCity by remember { mutableStateOf<String?>(null) }     // human-readable street/city
-    var locationError by remember { mutableStateOf<String?>(null) }  // error text for debugging / display
-    var loading by remember { mutableStateOf(true) }                 // whether location fetch is in progress
+    var locationError by remember { mutableStateOf<String?>(null) }  // error text
+    var loading by remember { mutableStateOf(true) }                 // location fetch in progress
 
-    //val recoVm: RecommendationViewModel = viewModel()
     val recoUi by recoVm.ui.collectAsState()
 
+    /* ---- Immediately use cached location/address if fresh ---- */
+    LaunchedEffect(Unit) {
+        if (HomeLocationCache.isFresh()) {
+            deviceLatLng = HomeLocationCache.lastLatLng
+            streetCity = HomeLocationCache.lastAddress
+            locationError = null
+            loading = false
+        }
+    }
+
     /**
-     * When permission becomes available, try to fetch the current device location.
-     * This block:
-     *  - Attempts getCurrentLocation()
-     *  - Falls back to lastLocation or a single accurate location fix if needed
-     *  - Reverse-geocodes to a street/city string for display
-     *  - On failure, we do NOT use any hardcoded fallback; we just show "Unavailable"/"Locating..."
+     * When permission becomes available, fetch location.
+     * Strategy:
+     *  1) If cache is fresh -> reuse, no GPS call.
+     *  2) Else:
+     *     a) Try fused.lastLocation (fast).
+     *     b) Use it immediately if present (update UI + cache).
+     *     c) If lastLocation is null, fall back to slower path
+     *        (getCurrentLocation / one-shot fix).
      */
     LaunchedEffect(hasLocationPermission) {
         if (!hasLocationPermission) return@LaunchedEffect
+
+        // Fast path: still-fresh cache
+        if (HomeLocationCache.isFresh()) {
+            deviceLatLng = HomeLocationCache.lastLatLng
+            streetCity = HomeLocationCache.lastAddress
+            locationError = null
+            loading = false
+            return@LaunchedEffect
+        }
+
         loading = true
         try {
-            val cts = CancellationTokenSource()
-            val current = fused.getCurrentLocation(
-                Priority.PRIORITY_HIGH_ACCURACY,
-                cts.token
-            ).await()
-
-            val latLng = when {
-                current != null -> LatLng(current.latitude, current.longitude)
-                else -> {
-                    // try last known location, otherwise request a single high-accuracy update
-                    fused.lastLocation.await()?.let { LatLng(it.latitude, it.longitude) }
-                        ?: awaitOneLocationFix(fused)
-                }
-            }
-
-            if (latLng == null) {
-                // ❌ No GPS fix — don't force any default city
-                locationError = "Fetching.."
-                deviceLatLng = null
-                streetCity = null
-            } else {
-                // ✅ Got a location: keep it and attempt reverse-geocoding
+            // 1) Try last known location first (very fast)
+            val last = fused.lastLocation.await()
+            if (last != null) {
+                val latLng = LatLng(last.latitude, last.longitude)
                 deviceLatLng = latLng
-                streetCity = reverseGeocodeStreetCity(context, latLng) ?: "Locating..."
+
+                val addr = reverseGeocodeStreetCity(context, latLng) ?: "Locating..."
+                streetCity = addr
                 locationError = null
+                HomeLocationCache.update(latLng, addr)
+                loading = false
+            } else {
+                // 2) If lastLocation was null, use slower but robust path
+                val cts = CancellationTokenSource()
+                val current = fused.getCurrentLocation(
+                    Priority.PRIORITY_HIGH_ACCURACY,
+                    cts.token
+                ).await()
+
+                val latLng = when {
+                    current != null -> LatLng(current.latitude, current.longitude)
+                    else -> {
+                        fused.lastLocation.await()?.let { LatLng(it.latitude, it.longitude) }
+                            ?: awaitOneLocationFix(fused)
+                    }
+                }
+
+                if (latLng == null) {
+                    if (HomeLocationCache.lastLatLng != null) {
+                        deviceLatLng = HomeLocationCache.lastLatLng
+                        streetCity = HomeLocationCache.lastAddress
+                        locationError = null
+                    } else {
+                        locationError = "Fetching.."
+                        deviceLatLng = null
+                        streetCity = null
+                    }
+                } else {
+                    deviceLatLng = latLng
+                    val addr = reverseGeocodeStreetCity(context, latLng) ?: "Locating..."
+                    streetCity = addr
+                    locationError = null
+                    HomeLocationCache.update(latLng, addr)
+                }
+                loading = false
             }
         } catch (e: SecurityException) {
-            // Permission missing or revoked while running
-            locationError = "Location permission not granted"
-            deviceLatLng = null
-            streetCity = null
+            if (HomeLocationCache.lastLatLng != null) {
+                deviceLatLng = HomeLocationCache.lastLatLng
+                streetCity = HomeLocationCache.lastAddress
+                locationError = null
+            } else {
+                locationError = "Location permission not granted"
+                deviceLatLng = null
+                streetCity = null
+            }
+            loading = false
         } catch (e: Exception) {
-            // Generic failure (network, geocoder, etc.)
-            locationError = "Location error"
-            deviceLatLng = null
-            streetCity = null
-        } finally {
+            if (HomeLocationCache.lastLatLng != null) {
+                deviceLatLng = HomeLocationCache.lastLatLng
+                streetCity = HomeLocationCache.lastAddress
+                locationError = null
+            } else {
+                locationError = "Location error"
+                deviceLatLng = null
+                streetCity = null
+            }
             loading = false
         }
     }
@@ -175,6 +249,8 @@ private fun HomeScreenContent(
     /**
      * When we have a deviceLatLng, trigger the RecommendationViewModel to load
      * recommendation tiles based on the categories we want (exclude emergency/services here).
+     *
+     * RecommendationViewModel itself has caching, so this is cheap after first load.
      */
     LaunchedEffect(deviceLatLng) {
         val center = deviceLatLng ?: return@LaunchedEffect
@@ -186,6 +262,8 @@ private fun HomeScreenContent(
             categories = recoCats
         )
     }
+
+    /* ----------------------------- UI ----------------------------- */
 
     Box(modifier = Modifier.fillMaxSize()) {
         Image(
@@ -236,7 +314,7 @@ private fun HomeScreenContent(
 
                     Column {
                         Text(
-                            text = "Hello $userName",
+                            text = "Hello $displayName",
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.Black
@@ -269,7 +347,8 @@ private fun HomeScreenContent(
                             parts != null -> listOfNotNull(parts.getOrNull(0), parts.getOrNull(1))
                                 .joinToString("\n")
                             loading && locationError == null -> "Fetching address…"
-                            locationError != null -> "Unavailable"
+                            locationError != null && streetCity == null -> "Unavailable"
+                            streetCity != null -> streetCity!!
                             else -> "Locating..."
                         },
                         fontSize = 13.sp,
@@ -304,26 +383,26 @@ private fun HomeScreenContent(
             )
             Spacer(modifier = Modifier.height(20.dp))
         }
-        ChatBubbleButton(
-            onClick = { navController.navigate("chat") },
+        FloatingActionButton(
+            onClick = {
+                navController.navigate("chat")
+            },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(end = 20.dp, bottom = 24.dp)
-        )
-
+                .padding(16.dp),
+            containerColor = Color(0xFF6B4D9C)
+        ) {
+            Icon(
+                imageVector = Icons.Default.SmartToy,
+                contentDescription = "Open Chatbot",
+                tint = Color.White
+            )
+        }
     }
 }
 
-/**
- * Small helper that tracks whether location permission is granted.
- *
- * Implementation details:
- *  - Uses ActivityResult launcher to request ACCESS_FINE/COARSE if needed.
- *  - Returns a derived [State<Boolean>] that updates when the result changes.
- *
- * Note: This is intentionally simple — production apps may want a more robust
- * permission UX (explainers, permanently denied flows, settings link, etc.).
- */
+/* ----------------------------- Permission helper ----------------------------- */
+
 @Composable
 private fun rememberLocationPermissionState(): State<Boolean> {
     val ctx = LocalContext.current
@@ -354,15 +433,8 @@ private fun rememberLocationPermissionState(): State<Boolean> {
     return remember { derivedStateOf { granted } }
 }
 
-/**
- * Waits for a single high-accuracy location fix by registering a one-shot listener.
- *
- * This uses suspendCancellableCoroutine to bridge the callback-based Location API
- * with coroutines and ensures we clean up listeners on cancellation.
- *
- * @param fused FusedLocationProviderClient used to request updates.
- * @return The LatLng of the first location result, or null if none arrived.
- */
+/* ----------------------------- One-shot location helper ----------------------------- */
+
 @Suppress("MissingPermission")
 private suspend fun awaitOneLocationFix(
     fused: FusedLocationProviderClient
@@ -386,15 +458,8 @@ private suspend fun awaitOneLocationFix(
     }
 }
 
-/**
- * Perform a reverse-geocode lookup (street + city) using Android's Geocoder on an IO dispatcher.
- *
- * If Geocoder isn't present or the lookup fails, this function returns null.
- *
- * @param context Application context for the Geocoder.
- * @param latLng Coordinates to reverse geocode.
- * @return A compact "street, city" string or null on failure.
- */
+/* ----------------------------- Reverse geocode helper ----------------------------- */
+
 private suspend fun reverseGeocodeStreetCity(
     context: Context,
     latLng: LatLng
@@ -418,37 +483,3 @@ private suspend fun reverseGeocodeStreetCity(
         null
     }
 }
-
-@Composable
-fun ChatBubbleButton(
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        modifier = modifier
-            .clickable { onClick() },
-        shape = RoundedCornerShape(50),
-        color = Color(0xFF2bb7c4).copy(alpha = 0.95f),
-        shadowElevation = 10.dp
-    ) {
-        Row(
-            modifier = Modifier
-                .padding(horizontal = 18.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Surface(
-                shape = CircleShape,
-                color = Color.White,
-                shadowElevation = 4.dp
-            ) {
-                Icon(
-                    imageVector = Icons.Default.SmartToy,
-                    contentDescription = "Chatbot",
-                    tint = Color(color = 0xFFF4b91D),
-                    modifier = Modifier.padding(8.dp)
-                )
-            }
-        }
-    }
-}
-
