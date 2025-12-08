@@ -102,7 +102,7 @@ private fun EnterEmailUI(isLoading: Boolean, onSendOtp: (String) -> Unit) {
             onClick = { onSendOtp(email) },
             modifier = Modifier.fillMaxWidth(),
             enabled = !isLoading,
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF333333))
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xff023C85))
         ) {
             if (isLoading) CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White)
             else Text("Send Otp", color = Color.White, modifier = Modifier.padding(vertical = 8.dp))

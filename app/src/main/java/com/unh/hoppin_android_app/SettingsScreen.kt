@@ -117,8 +117,8 @@ fun SettingsScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                    titleContentColor = MaterialTheme.colorScheme.onBackground
+                    containerColor = Color(0xfff8f0e3),
+                    titleContentColor = Color(0xFF000000)
                 )
             )
         },
@@ -181,7 +181,7 @@ fun ChangePasswordSection(
                 .fillMaxWidth()
                 .border(1.dp, Color.LightGray, RoundedCornerShape(12.dp))
                 .clip(RoundedCornerShape(12.dp))
-                .background(Color.White)
+                .background(Color(0xfff8f0e3))
                 .clickable { expanded = !expanded }
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -251,7 +251,7 @@ fun NotificationSettingsSection(
             .fillMaxWidth()
             .border(1.dp, Color.LightGray, RoundedCornerShape(12.dp))
             .clip(RoundedCornerShape(12.dp))
-            .background(Color.White)
+            .background(Color(0xfff8f0e3))
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
@@ -275,7 +275,7 @@ fun ContactUsSection() {
                 .fillMaxWidth()
                 .border(1.dp, Color.LightGray, RoundedCornerShape(12.dp))
                 .clip(RoundedCornerShape(12.dp))
-                .background(Color.White)
+                .background(Color(0xfff8f0e3))
                 .clickable { expanded = !expanded }
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -313,7 +313,7 @@ private fun TripItinerariesRow(
             .fillMaxWidth()
             .border(1.dp, Color.LightGray, RoundedCornerShape(12.dp))
             .clip(RoundedCornerShape(12.dp))
-            .background(Color.White)
+            .background(Color(0xfff8f0e3))
             .clickable { onClick() }
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,

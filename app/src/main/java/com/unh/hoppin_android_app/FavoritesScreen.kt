@@ -62,7 +62,11 @@ fun FavoritesScreen(
         topBar = {
             TopAppBar(
                 title = { Text("Favourites") },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, null) } }
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, null) } },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color(0xfff8f0e3),
+                    titleContentColor = Color(0xFF000000)
+                )
             )
         },
         snackbarHost = { SnackbarHost(snackbar) },

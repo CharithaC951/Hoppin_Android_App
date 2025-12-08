@@ -62,12 +62,7 @@ class MainActivity : ComponentActivity() {
             Places.initialize(this, PLACES_API_KEY)
         }
 
-        var keepOn = true
-        lifecycleScope.launch {
-            kotlinx.coroutines.delay(250)
-            keepOn = false
-        }
-        splash.setKeepOnScreenCondition { keepOn }
+        splash.setKeepOnScreenCondition { false }
 
         setContent {
             Hoppin_Android_AppTheme {
