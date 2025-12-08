@@ -10,7 +10,6 @@ import androidx.compose.material.*
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
-import androidx.compose.ui.res.painterResource
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -24,8 +23,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -35,12 +32,11 @@ import androidx.navigation.NavController
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.libraries.places.api.model.Place
 import com.unh.hoppin_android_app.viewmodels.LocationViewModel
-import com.unh.hoppin_android_app.ui.theme.DarkPurple
-import com.unh.hoppin_android_app.ui.theme.LightPurple
 import com.unh.hoppin_android_app.viewmodels.ChatViewModel
 import kotlin.collections.reversed
-import androidx.compose.foundation.Image
-import androidx.compose.ui.draw.shadow
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 
 /**
  * ChatScreen
@@ -54,6 +50,7 @@ import androidx.compose.ui.draw.shadow
  * @param locationViewModel ViewModel that provides the device location (optional for location-aware replies).
  * @param onNavigateBack Callback when the user taps the back button.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(
     chatViewModel: ChatViewModel,
@@ -74,12 +71,14 @@ fun ChatScreen(
             TopAppBar(
                 title = { Text("Chat with me") },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
-                backgroundColor = Color.Transparent,
-                elevation = 4.dp
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color(0xfff8f0e3),
+                    titleContentColor = Color(0xFF000000)
+                )
             )
         },
         containerColor = Color.Transparent
@@ -156,7 +155,7 @@ fun MessageBubble(message: ChatMessage) {
                 Icon(
                     imageVector = Icons.Filled.SmartToy,
                     contentDescription = "Bot Avatar",
-                    tint = Color.Cyan,
+                    tint = Color(0xff023C85),
                     modifier = Modifier.padding(end = 8.dp)
                 )
             }

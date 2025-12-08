@@ -63,7 +63,11 @@ fun SubCategoriesScreen(
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back")
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color(0xfff8f0e3),
+                    titleContentColor = Color(0xFF000000)
+                )
             )
         },
         containerColor = Color.Transparent
@@ -74,6 +78,16 @@ fun SubCategoriesScreen(
                 .padding(padding)
                 .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
+            val selectedColor = Color(0xFF023c85)
+            val unselectedColor = Color(0xff45c2db)
+
+            @Composable
+            fun chipColors(selected: Boolean) = FilterChipDefaults.filterChipColors(
+                selectedContainerColor = if (selected) selectedColor else unselectedColor,
+                selectedLabelColor = Color.White,
+                containerColor = if (!selected) unselectedColor else selectedColor,
+                labelColor = Color.White
+            )
             // Subcategory chips
             LazyRow(
                 modifier = Modifier.fillMaxWidth(),
@@ -86,7 +100,8 @@ fun SubCategoriesScreen(
                         onClick = {
                             scope.launch { pagerState.animateScrollToPage(index) }
                         },
-                        label = { Text(sub.title) }
+                        label = { Text(sub.title) },
+                        colors = chipColors(pagerState.currentPage == index)
                     )
                 }
             }

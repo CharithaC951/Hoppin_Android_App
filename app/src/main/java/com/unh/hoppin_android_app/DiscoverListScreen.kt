@@ -337,8 +337,8 @@ fun DiscoverListScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color(0xFFFFE082),
-                    titleContentColor = Color(0xFF4E342E)
+                    containerColor = Color(0xfff8f0e3),
+                    titleContentColor = Color(0xFF000000)
                 )
             )
         },

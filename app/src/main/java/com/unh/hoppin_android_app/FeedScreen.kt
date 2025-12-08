@@ -56,7 +56,11 @@ fun FeedScreen(
                     IconButton(onClick = onBack) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color(0xfff8f0e3),
+                    titleContentColor = Color(0xFF000000)
+                )
             )
         },
         containerColor = Color.Transparent
