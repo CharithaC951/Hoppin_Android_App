@@ -97,6 +97,7 @@ private fun SignInUI(
     val auth = FirebaseAuth.getInstance()
     val db = FirebaseFirestore.getInstance()
     val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val googleSignInLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult(),
@@ -137,7 +138,7 @@ private fun SignInUI(
                                         }
                                         .addOnFailureListener { e ->
                                             isLoading = false
-                                            Toast.makeText(context, "Failed to create profile: ${e.message}", Toast.LENGTH_LONG).show()
+                                            scope.launch { snackbarHostState.showSnackbar("Failed to create profile: ${e.message}") }
                                         }
                                 } else {
                                     scope.launch {
@@ -155,12 +156,12 @@ private fun SignInUI(
                         }
                     } else {
                         isLoading = false
-                        Toast.makeText(context, "Authentication failed.", Toast.LENGTH_SHORT).show()
+                        scope.launch { snackbarHostState.showSnackbar("Authentication failed.") }
                     }
                 }
             } catch (e: ApiException) {
                 isLoading = false
-                Toast.makeText(context, "Google sign in failed.", Toast.LENGTH_SHORT).show()
+                scope.launch { snackbarHostState.showSnackbar("Google sign in failed.") }
             }
         }
     )
@@ -245,7 +246,7 @@ private fun SignInUI(
             Button(
                 onClick = {
                     if (email.isBlank() || password.isBlank()) {
-                        Toast.makeText(context, "Email and password cannot be empty.", Toast.LENGTH_SHORT).show()
+                        scope.launch { snackbarHostState.showSnackbar("Email and password cannot be empty.") }
                         return@Button
                     }
                     isLoading = true
@@ -270,7 +271,7 @@ private fun SignInUI(
                                         }
                                 }
                             } else {
-                                Toast.makeText(context, "Invalid username or password.", Toast.LENGTH_LONG).show()
+                                scope.launch { snackbarHostState.showSnackbar("Invalid username or password.") }
                                 isLoading = false
                             }
                         }
@@ -342,6 +343,10 @@ private fun SignInUI(
         ) {
             Text("Sign up", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
         }
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.align(Alignment.CenterHorizontally)
+        )
     }
 }
 
@@ -355,6 +360,8 @@ private fun CreateAccountUI(onNavigateBack: () -> Unit) {
     var confirmPassword by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
     var showSuccessDialog by remember { mutableStateOf(false) }
 
     // Define the common styling for text fields to ensure consistency
@@ -396,7 +403,7 @@ private fun CreateAccountUI(onNavigateBack: () -> Unit) {
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
             )
         },
-        containerColor = Color.Transparent
+        containerColor = Color.Transparent,
     ) { paddingValues ->
         Column(
             modifier = Modifier
@@ -488,18 +495,17 @@ private fun CreateAccountUI(onNavigateBack: () -> Unit) {
                 shape = textFieldShape
             )
             Spacer(modifier = Modifier.height(32.dp))
-
             if (isLoading) {
                 CircularProgressIndicator(color = Color.White)
             } else {
                 Button(
                     onClick = {
                         if (name.isBlank() || email.isBlank() || password.isBlank()) {
-                            Toast.makeText(context, "Name, email, and password cannot be empty.", Toast.LENGTH_SHORT).show()
+                            scope.launch { snackbarHostState.showSnackbar("Name, Email and password cannot be empty.") }
                             return@Button
                         }
                         if (password != confirmPassword) {
-                            Toast.makeText(context, "Passwords do not match.", Toast.LENGTH_SHORT).show()
+                            scope.launch { snackbarHostState.showSnackbar("Passwords do not match.") }
                             return@Button
                         }
 
@@ -519,15 +525,15 @@ private fun CreateAccountUI(onNavigateBack: () -> Unit) {
                                             }
                                             .addOnFailureListener { e ->
                                                 isLoading = false
-                                                Toast.makeText(context, "Failed to save user details: ${e.message}", Toast.LENGTH_LONG).show()
+                                                scope.launch { snackbarHostState.showSnackbar("Failed to save user details: ${e.message}") }
                                             }
                                     } else {
                                         isLoading = false
-                                        Toast.makeText(context, "Account created but user id missing.", Toast.LENGTH_LONG).show()
+                                        scope.launch { snackbarHostState.showSnackbar("Account created but user id missing.") }
                                     }
                                 } else {
                                     isLoading = false
-                                    Toast.makeText(context, "Account creation failed: ${task.exception?.message}", Toast.LENGTH_LONG).show()
+                                    scope.launch { snackbarHostState.showSnackbar("Account creation failed: ${task.exception?.message}") }
                                 }
                             }
                     },
@@ -540,6 +546,10 @@ private fun CreateAccountUI(onNavigateBack: () -> Unit) {
                 }
             }
             TermsAndPrivacyText()
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            )
         }
     }
 }
