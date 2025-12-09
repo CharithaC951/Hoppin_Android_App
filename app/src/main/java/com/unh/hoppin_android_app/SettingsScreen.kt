@@ -66,7 +66,7 @@ fun SettingsScreen(
 ) {
     val uiState by settingsViewModel.uiState.collectAsState()
     val context = LocalContext.current
-
+    val snackbarHostState = remember { SnackbarHostState() }
     val notificationPermissionState = rememberPermissionState(
         permission = Manifest.permission.POST_NOTIFICATIONS
     )
@@ -78,11 +78,11 @@ fun SettingsScreen(
             }
         }
         uiState.successMessage?.let {
-            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+            snackbarHostState.showSnackbar("Password updated successfully")
             settingsViewModel.clearMessages()
         }
         uiState.errorMessage?.let {
-            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+            snackbarHostState.showSnackbar(it)
             settingsViewModel.clearMessages()
         }
 
@@ -122,6 +122,7 @@ fun SettingsScreen(
                 )
             )
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = Color.Transparent
     ) { innerPadding ->
         Column(
