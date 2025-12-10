@@ -64,6 +64,7 @@ dependencies {
 
     // ADD THIS LINE: For loading the Hoppin logo image
     implementation("io.coil-kt:coil-compose:2.6.0")
+    implementation(libs.androidx.compose.foundation)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
