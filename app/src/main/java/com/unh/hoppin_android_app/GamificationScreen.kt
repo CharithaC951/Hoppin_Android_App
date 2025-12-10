@@ -1,6 +1,7 @@
 package com.unh.hoppin_android_app
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -8,13 +9,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Badge
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Explore
+import androidx.compose.material.icons.filled.HealthAndSafety
 import androidx.compose.material.icons.filled.LocalDining
+import androidx.compose.material.icons.filled.LocalHospital
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Spa
-import androidx.compose.material.icons.filled.HealthAndSafety
-import androidx.compose.material.icons.filled.LocalHospital
-import androidx.compose.material.icons.filled.Build
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Card
@@ -29,18 +30,24 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.tasks.await
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,31 +57,75 @@ fun GamificationScreen(
 ) {
     val uid = FirebaseAuth.getInstance().currentUser?.uid ?: "no-user"
 
-    // Streak state (already implemented in your VM)
+    // Streak + category VMs (unchanged)
     val streakViewModel: GamificationStreakViewModel = viewModel(key = uid)
     val streakState by streakViewModel.streak.collectAsState()
 
-    // Category progress state (backed by Firestore /gamification/categoryProgress)
     val categoryVm: CategoryProgressViewModel = viewModel(key = "category-$uid")
     val categoryState by categoryVm.state.collectAsState()
+
+    // --------- NEW: resolve display name similar to LoginScreen ----------
+    val auth = FirebaseAuth.getInstance()
+    val db = FirebaseFirestore.getInstance()
+
+    var displayName by remember {
+        mutableStateOf(
+            userName.takeIf { it.isNotBlank() && it != "User" } ?: "User"
+        )
+    }
+
+    LaunchedEffect(auth.currentUser?.uid) {
+        val firebaseUser = auth.currentUser
+        var name = userName.takeIf { it.isNotBlank() && it != "User" }
+            ?: firebaseUser?.displayName
+            ?: firebaseUser?.email
+            ?: "User"
+
+        val currentUid = firebaseUser?.uid
+        if (currentUid != null) {
+            try {
+                val snapshot = db.collection("users")
+                    .document(currentUid)
+                    .get()
+                    .await()
+                val dbName = snapshot.getString("name")
+                if (!dbName.isNullOrBlank()) {
+                    name = dbName
+                }
+            } catch (_: Exception) {
+                // ignore errors, keep fallback name
+            }
+        }
+        displayName = name
+    }
+    // -------------------------------------------------------------------
 
     val scrollState = rememberScrollState()
 
     Scaffold(
         containerColor = Color.Transparent,
-        // 🌼 pale warm yellow background
         topBar = {
             TopAppBar(
-                title = { Text("Gamification") },
+                title = {
+                    Text(
+                        "Gamification",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF3E2723)
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = { navController.navigateUp() }) {
                         Icon(Icons.Default.Badge, contentDescription = "Back")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
+                colors =  if(!isSystemInDarkTheme()){ TopAppBarDefaults.topAppBarColors(
                     containerColor = Color(0xfff8f0e3),
                     titleContentColor = Color(0xFF000000)
                 )
+                } else {
+                    TopAppBarDefaults.topAppBarColors()
+                }
             )
         },
     ) { inner ->
@@ -94,7 +145,6 @@ fun GamificationScreen(
                     .padding(top = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Profile icon – warm & strong
                 Surface(
                     shape = CircleShape,
                     color = Color(0xFFFFB300), // bright amber
@@ -116,21 +166,24 @@ fun GamificationScreen(
                 }
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    text = userName,
+                    text = displayName, // ✅ resolved name
                     style = MaterialTheme.typography.titleLarge,
+                    fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF3E2723)
                 )
                 Text(
                     text = "Earn streaks & badges by visiting places!",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFF6D4C41)
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFF5D4037)
                 )
             }
 
             Spacer(Modifier.height(16.dp))
 
-            // ---------------- Streak Hero Card (blue theme) ----------------
+            // ---------------- Streak Hero Card (BLUE theme) ----------------
             Card(
                 shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(
@@ -151,19 +204,24 @@ fun GamificationScreen(
                         Text(
                             text = "Current Streak",
                             style = MaterialTheme.typography.labelMedium,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
                             color = Color(0xFFE3F2FD) // very light blue
                         )
-                        Spacer(Modifier.height(4.dp))
+                        Spacer(Modifier.height(6.dp))
                         Text(
                             text = "${streakState.currentStreak} days",
                             style = MaterialTheme.typography.headlineMedium,
+                            fontSize = 26.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
                         )
-                        Spacer(Modifier.height(4.dp))
+                        Spacer(Modifier.height(6.dp))
                         Text(
                             text = "Best: ${streakState.bestStreak} days",
                             style = MaterialTheme.typography.bodySmall,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
                             color = Color(0xFFBBDEFB)
                         )
                     }
@@ -181,23 +239,25 @@ fun GamificationScreen(
                         ) {
                             Text(
                                 text = "🔥",
-                                style = MaterialTheme.typography.headlineSmall
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontSize = 26.sp
                             )
                         }
                     }
                 }
             }
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(16.dp))
 
-            // ---------------- Streak Milestones (blue-ish chips) ----------------
+            // ---------------- Streak Milestones ----------------
             Text(
                 "Streak Milestones",
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = Color(0xFF1A237E)
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF3E2723)
             )
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(10.dp))
             val targets = listOf(1, 3, 7, 14, 30)
             StreakRow(
                 achieved = targets.filter { it <= streakState.currentStreak }.toSet(),
@@ -210,23 +270,25 @@ fun GamificationScreen(
             Text(
                 "Category Badges",
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
                 color = Color(0xFF3E2723)
             )
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(6.dp))
 
             Text(
                 text = "Visit distinct real-world places to level up each category badge.",
                 style = MaterialTheme.typography.bodySmall,
-                color = Color(0xFF6D4C41)
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color(0xFFffffff)
             )
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(16.dp))
 
             // Helper to read visits for a category from state
             fun visitsFor(catId: Int): Int = categoryState.visits[catId] ?: 0
 
-            // One badge per category, using your 1–8 mapping
             val badges = remember {
                 listOf(
                     BadgeItem("Explore", Icons.Default.Explore, categoryId = 1),
@@ -286,7 +348,8 @@ private fun StreakRow(
                 label = {
                     Text(
                         text = "${d}d",
-                        fontWeight = if (isOn) FontWeight.SemiBold else FontWeight.Normal
+                        fontSize = 14.sp,
+                        fontWeight = if (isOn) FontWeight.Bold else FontWeight.SemiBold
                     )
                 },
                 leadingIcon = if (isOn) {
@@ -300,7 +363,7 @@ private fun StreakRow(
                     labelColor = if (isOn)
                         Color(0xFF0D47A1)
                     else
-                        MaterialTheme.colorScheme.onSurface
+                        Color(0xFF37474F)
                 )
             )
         }
@@ -333,9 +396,11 @@ private fun BadgeCircle(
 ) {
     val locked = visits <= 0
     val tierLabel = tierLabelForVisits(visits)
-    val bgColor = if (locked) Color(0xFFF5F5F5) else categoryColor(item.categoryId)
-    val borderColor = if (locked) Color(0xFFCFD8DC) else categoryColor(item.categoryId)
-    val iconTint = if (locked) Color(0xFF9E9E9E) else Color.White
+
+    // Darker for locked so white text is readable
+    val bgColor = if (locked) Color(0xFF90A4AE) else categoryColor(item.categoryId)
+    val borderColor = if (locked) Color(0xFF78909C) else categoryColor(item.categoryId)
+    val iconTint = Color.White
 
     val statusText = when {
         locked -> "Locked"
@@ -349,11 +414,11 @@ private fun BadgeCircle(
     ) {
         Surface(
             shape = CircleShape,
-            tonalElevation = if (!locked) 6.dp else 0.dp,
-            shadowElevation = if (!locked) 6.dp else 0.dp,
+            tonalElevation = if (!locked) 6.dp else 2.dp,
+            shadowElevation = if (!locked) 6.dp else 2.dp,
             color = bgColor,
             border = BorderStroke(2.dp, borderColor),
-            modifier = Modifier.size(72.dp)
+            modifier = Modifier.size(80.dp)
         ) {
             Box(
                 modifier = Modifier.fillMaxSize(),
@@ -366,17 +431,20 @@ private fun BadgeCircle(
                 )
             }
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(10.dp))
         Text(
             item.title,
             style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = Color(0xFF3E2723)
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.White        // title: white
         )
         Text(
             statusText,
             style = MaterialTheme.typography.labelSmall,
-            color = Color(0xFF6D4C41),
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = Color.White,       // status: white
             maxLines = 2
         )
     }
@@ -426,13 +494,13 @@ private fun tierLabelForVisits(visits: Int): String = when (tierForVisits(visits
  * 8 – Services
  */
 private fun categoryColor(categoryId: Int): Color = when (categoryId) {
-    1 -> Color(0xFF42A5F5) // Explore – bright blue
-    2 -> Color(0xFFFF9800) // Refresh – orange
-    3 -> Color(0xFFAB47BC) // Entertain – purple
+    1 -> Color(0xFF00897B) // Explore – teal
+    2 -> Color(0xFFFFB74D) // Refresh – soft orange
+    3 -> Color(0xFFBA68C8) // Entertain – warm purple
     4 -> Color(0xFF8D6E63) // ShopStop – warm brown
-    5 -> Color(0xFF26C6DA) // Relax – aqua / chill
-    6 -> Color(0xFF66BB6A) // Wellbeing – green
+    5 -> Color(0xFF4DB6AC) // Relax – soft teal
+    6 -> Color(0xFF81C784) // Wellbeing – gentle green
     7 -> Color(0xFFE53935) // Emergency – red
-    8 -> Color(0xFF5C6BC0) // Services – indigo
+    8 -> Color(0xFF5C6BC0) // Services – indigo accent
     else -> Color(0xFFFFB300)
 }
