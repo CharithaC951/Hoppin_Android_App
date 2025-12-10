@@ -35,6 +35,7 @@ import com.unh.hoppin_android_app.viewmodels.LocationViewModel
 import com.unh.hoppin_android_app.viewmodels.ChatViewModel
 import kotlin.collections.reversed
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 
@@ -69,7 +70,9 @@ fun ChatScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Chat with me") },
+                title = { Text("Chat with me",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")

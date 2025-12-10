@@ -8,6 +8,7 @@ import android.graphics.Bitmap
 import android.net.Uri
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.pager.HorizontalPager
@@ -24,6 +25,7 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.*
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,6 +53,7 @@ import com.google.firebase.firestore.ktx.firestore
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import com.google.firebase.auth.ktx.auth
+import com.unh.hoppin_android_app.ui.theme.cardColor
 import com.unh.hoppin_android_app.viewmodels.TripItinerariesViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -342,7 +345,7 @@ fun PlaceDetailsScreen(
 
     Scaffold(
         topBar = {
-            CenterAlignedTopAppBar(
+            TopAppBar(
                 title = {
                     Column {
                         Text(
@@ -356,6 +359,14 @@ fun PlaceDetailsScreen(
                     IconButton(onClick = onBack) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
                     }
+                },
+
+                colors =  if(!isSystemInDarkTheme()){ TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color(0xfff8f0e3),
+                        titleContentColor = Color(0xFF000000)
+                    )
+                } else {
+                    TopAppBarDefaults.topAppBarColors()
                 }
             )
         },
@@ -375,7 +386,7 @@ fun PlaceDetailsScreen(
                     Text(
                         "Loading place details…",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = Color.Black
                     )
                 }
             }
@@ -389,6 +400,7 @@ fun PlaceDetailsScreen(
                 ElevatedCard(
                     shape = RoundedCornerShape(20.dp),
                     elevation = CardDefaults.elevatedCardElevation(defaultElevation = 6.dp),
+                    colors = CardDefaults.elevatedCardColors(cardColor),
                     modifier = Modifier
                         .padding(24.dp)
                         .fillMaxWidth()
@@ -400,13 +412,14 @@ fun PlaceDetailsScreen(
                         Text(
                             text = "Unable to load place",
                             style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.Black
                         )
                         Spacer(Modifier.height(4.dp))
                         Text(
                             text = error ?: "Unknown error",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = Color.Black,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
                     }
@@ -478,13 +491,15 @@ fun PlaceDetailsScreen(
                             .padding(horizontal = 16.dp)
                             .fillMaxWidth(),
                         shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.elevatedCardColors(Color(0xfff8f0e3)),
                         elevation = CardDefaults.elevatedCardElevation(defaultElevation = 4.dp)
                     ) {
                         Column(Modifier.padding(16.dp)) {
                             Text(
                                 name.orEmpty(),
                                 style = MaterialTheme.typography.headlineSmall,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
+                                color = Color.Black
                             )
                             Spacer(Modifier.height(8.dp))
 
@@ -499,13 +514,13 @@ fun PlaceDetailsScreen(
                                         Text(
                                             "  ·  $t reviews",
                                             style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            color = Color.Black
                                         )
                                     }
                                 } ?: Text(
                                     "No rating yet",
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = Color.Black
                                 )
                             }
 
@@ -513,6 +528,7 @@ fun PlaceDetailsScreen(
                                 Spacer(Modifier.height(8.dp))
                                 Text(
                                     it,
+                                    color = Color.Black,
                                     style = MaterialTheme.typography.bodyMedium
                                 )
                             }
@@ -524,10 +540,9 @@ fun PlaceDetailsScreen(
                                     tonalElevation = 1.dp
                                 ) {
                                     val text = if (open) "Open now" else "Closed now"
-                                    val color = if (open) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                                     Text(
                                         text = text,
-                                        color = color,
+                                        color = Color.Black,
                                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
                                         style = MaterialTheme.typography.labelMedium
                                     )
@@ -550,6 +565,7 @@ fun PlaceDetailsScreen(
                         ElevatedCard(
                             shape = RoundedCornerShape(18.dp),
                             elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
+                            colors = CardDefaults.elevatedCardColors(Color(0xfff8f0e3)),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             val shape = RoundedCornerShape(14.dp)
@@ -666,7 +682,7 @@ fun PlaceDetailsScreen(
                                     ) {
                                         Icon(Icons.Filled.Directions, contentDescription = "Directions")
                                         Spacer(Modifier.width(6.dp))
-                                        Text("Directions")
+                                        Text("Directions", color = Color.Black)
                                     }
                                 }
                             }
@@ -685,12 +701,13 @@ fun PlaceDetailsScreen(
                         ElevatedCard(
                             shape = RoundedCornerShape(18.dp),
                             elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
+                            colors = CardDefaults.elevatedCardColors(Color(0xfff8f0e3)),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text(
                                 text = editorial ?: "No description available.",
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface,
+                                color = Color.Black,
                                 modifier = Modifier.padding(14.dp)
                             )
                         }
@@ -708,6 +725,7 @@ fun PlaceDetailsScreen(
                         ElevatedCard(
                             shape = RoundedCornerShape(18.dp),
                             elevation = CardDefaults.elevatedCardElevation(defaultElevation = 3.dp),
+                            colors = CardDefaults.elevatedCardColors(Color(0xfff8f0e3)),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             FilledTonalButton(
@@ -730,13 +748,14 @@ fun PlaceDetailsScreen(
                         Text(
                             text = "Top Reviews",
                             style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold
+                            fontWeight = FontWeight.SemiBold,
                         )
                         Spacer(Modifier.height(8.dp))
 
                         if (reviews.isEmpty()) {
                             ElevatedCard(
                                 elevation = CardDefaults.elevatedCardElevation(defaultElevation = 4.dp),
+                                colors = CardDefaults.elevatedCardColors(Color(0xfff8f0e3)),
                                 shape = RoundedCornerShape(16.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
@@ -744,7 +763,7 @@ fun PlaceDetailsScreen(
                                     Text(
                                         "No reviews yet. Be the first to write one!",
                                         style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = Color.Black
                                     )
                                 }
                             }
@@ -757,6 +776,7 @@ fun PlaceDetailsScreen(
                                     ElevatedCard(
                                         shape = RoundedCornerShape(16.dp),
                                         elevation = CardDefaults.elevatedCardElevation(defaultElevation = 3.dp),
+                                        colors = CardDefaults.elevatedCardColors(Color(0xfff8f0e3)),
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
                                         Column(Modifier.padding(14.dp)) {
@@ -772,17 +792,18 @@ fun PlaceDetailsScreen(
                                             Text(
                                                 text = r.author.ifBlank { "Anonymous" },
                                                 style = MaterialTheme.typography.titleMedium,
-                                                fontWeight = FontWeight.SemiBold
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = Color.Black
                                             )
                                             Spacer(Modifier.height(2.dp))
                                             if (r.text.isNotBlank()) {
-                                                Text(r.text, style = MaterialTheme.typography.bodyMedium)
+                                                Text(r.text,color = Color.Black, style = MaterialTheme.typography.bodyMedium)
                                                 Spacer(Modifier.height(4.dp))
                                             }
                                             Text(
                                                 formatShortDateTime(r.createdAt.toDate()),
                                                 style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                color = Color.Black
                                             )
                                         }
                                     }
@@ -803,6 +824,7 @@ fun PlaceDetailsScreen(
 
                         ElevatedCard(
                             elevation = CardDefaults.elevatedCardElevation(defaultElevation = 6.dp),
+                            colors = CardDefaults.elevatedCardColors(Color(0xfff8f0e3)),
                             shape = RoundedCornerShape(16.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {

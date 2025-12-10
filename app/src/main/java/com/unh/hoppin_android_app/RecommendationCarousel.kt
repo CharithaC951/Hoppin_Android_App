@@ -21,6 +21,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.isSystemInDarkTheme
 import com.unh.hoppin_android_app.ui.theme.cardColor
 import com.unh.hoppin_android_app.viewmodels.RecommendationsUiState
 import kotlin.math.roundToInt
@@ -39,7 +40,7 @@ fun RecommendationsBlock(
         style = MaterialTheme.typography.headlineSmall,
         fontSize = 20.sp,
         fontWeight = FontWeight.Bold,
-        color = Color.Black,
+        color = MaterialTheme.colorScheme.onBackground,
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
     )
 
@@ -50,13 +51,16 @@ fun RecommendationsBlock(
             }
             return
         }
+
         ui.error != null -> {
             Text(text = ui.error, color = MaterialTheme.colorScheme.error)
             return
         }
+
         ui.flatItems.isEmpty() -> {
             Text(
                 "No recommendations found.",
+                color = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
             )
             return
@@ -96,17 +100,26 @@ private fun FullWidthRecommendationCard(
     imageHeight: Dp = 220.dp,
     onClick: () -> Unit = {}
 ) {
-    // Outer gradient frame
+    val isDark = isSystemInDarkTheme()
+
+    // Gradient frame that adapts for dark / light
+    val gradientColors = if (!isDark) {
+        listOf(
+            Color(0xFFFFC857), // softer golden
+            Color(0xFFF7B267)  // warm peach
+        )
+    } else {
+        listOf(
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
+            MaterialTheme.colorScheme.secondary.copy(alpha = 0.85f)
+        )
+    }
+
     Box(
         modifier = Modifier
             .width(width)
             .background(
-                brush = Brush.linearGradient(
-                    colors = listOf(
-                        Color(0xFFFFC857), // softer golden
-                        Color(0xFFF7B267)  // warm peach
-                    )
-                ),
+                brush = Brush.linearGradient(colors = gradientColors),
                 shape = RoundedCornerShape(20.dp)
             )
             .padding(2.dp) // gradient border thickness
@@ -129,7 +142,8 @@ private fun FullWidthRecommendationCard(
                     Text(
                         text = categoryTitle,
                         style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary
+                        fontSize = 12.sp,
+                        color = Color.Black,
                     )
                     Spacer(Modifier.height(2.dp))
                 }
@@ -139,7 +153,9 @@ private fun FullWidthRecommendationCard(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    fontSize = 12.sp,
+                    color = Color.Black,
                 )
             }
 
@@ -165,7 +181,11 @@ private fun FullWidthRecommendationCard(
                             .clip(RoundedCornerShape(16.dp)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text("No photo", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "No photo",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
 
@@ -187,6 +207,8 @@ private fun FullWidthRecommendationCard(
  */
 @Composable
 private fun DistanceChip(meters: Double, modifier: Modifier = Modifier) {
+    val isDark = isSystemInDarkTheme()
+
     val text = if (meters >= 1609) {
         val miles = ((meters / 1609.34) * 10).roundToInt() / 10.0
         "$miles mi"
@@ -195,9 +217,13 @@ private fun DistanceChip(meters: Double, modifier: Modifier = Modifier) {
         "$feet ft"
     }
 
+    val chipColor = MaterialTheme.colorScheme.surface.copy(
+        alpha = if (isDark) 0.95f else 0.92f
+    )
+
     Surface(
         modifier = modifier,
-        color = Color.White.copy(alpha = 0.92f),
+        color = chipColor,
         shape = RoundedCornerShape(999.dp),
         shadowElevation = 4.dp,
         tonalElevation = 0.dp
@@ -205,6 +231,7 @@ private fun DistanceChip(meters: Double, modifier: Modifier = Modifier) {
         Text(
             text = text,
             style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
         )
     }

@@ -26,8 +26,12 @@ import com.google.android.libraries.places.api.model.Place
 import com.google.android.libraries.places.api.net.FetchPhotoRequest
 import com.google.android.libraries.places.api.net.FetchPlaceRequest
 import com.google.android.libraries.places.api.net.PlacesClient
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.roundToInt
@@ -46,7 +50,7 @@ fun FavoritesScreen(
     val scope = rememberCoroutineScope()
 
     val context = LocalContext.current
-    // ✅ Correct way: key the remember with context
+    // Create PlacesClient once per context
     val client: PlacesClient = remember(context) { Places.createClient(context) }
 
     var loading by remember { mutableStateOf(false) }
@@ -54,7 +58,10 @@ fun FavoritesScreen(
 
     LaunchedEffect(ids, center, client) {
         loading = true
-        places = hydrate(client, ids.toList(), center)
+        // Heavy work off the main thread
+        places = withContext(Dispatchers.IO) {
+            hydrate(client, ids.toList(), center)
+        }
         loading = false
     }
 
@@ -62,7 +69,11 @@ fun FavoritesScreen(
         topBar = {
             TopAppBar(
                 title = { Text("Favourites") },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, null) } },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Filled.ArrowBack, null)
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color(0xfff8f0e3),
                     titleContentColor = Color(0xFF000000)
@@ -73,10 +84,29 @@ fun FavoritesScreen(
         containerColor = Color.Transparent
     ) { inner ->
         when {
-            loading -> Box(Modifier.fillMaxSize().padding(inner), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-            places.isEmpty() -> Box(Modifier.fillMaxSize().padding(inner), contentAlignment = Alignment.Center) { Text("No favourites yet") }
+            loading -> Box(
+                Modifier
+                    .fillMaxSize()
+                    .padding(inner),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator()
+            }
+
+            places.isEmpty() -> Box(
+                Modifier
+                    .fillMaxSize()
+                    .padding(inner),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("No favourites yet")
+            }
+
             else -> LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(inner).padding(horizontal = 16.dp),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(inner)
+                    .padding(horizontal = 16.dp),
                 contentPadding = PaddingValues(vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
@@ -98,21 +128,75 @@ fun FavoritesScreen(
     }
 }
 
-private suspend fun hydrate(client: PlacesClient, placeIds: List<String>, center: LatLng): List<UiPlace> {
-    if (placeIds.isEmpty()) return emptyList()
-    val fields = listOf(Place.Field.ID, Place.Field.NAME, Place.Field.PHOTO_METADATAS, Place.Field.LAT_LNG)
-    val out = mutableListOf<UiPlace>()
-    for (id in placeIds) {
-        val place = runCatching { client.fetchPlace(FetchPlaceRequest.builder(id, fields).build()).await().place }.getOrNull() ?: continue
-        val meta: PhotoMetadata? = place.photoMetadatas?.firstOrNull()
-        val bmp = if (meta != null) runCatching {
-            client.fetchPhoto(FetchPhotoRequest.builder(meta).setMaxWidth(1280).setMaxHeight(720).build()).await().bitmap
-        }.getOrNull() else null
-        val d = place.latLng?.let { ll -> distanceMeters(center.latitude, center.longitude, ll.latitude, ll.longitude).roundToInt() }
-        val title = place.name ?: continue
-        out += UiPlace(id, title, bmp, d)
+/**
+ * Faster hydrate:
+ *  - Runs network calls in parallel using coroutines
+ *  - Uses smaller photos for faster download
+ */
+private suspend fun hydrate(
+    client: PlacesClient,
+    placeIds: List<String>,
+    center: LatLng
+): List<UiPlace> = coroutineScope {
+    if (placeIds.isEmpty()) return@coroutineScope emptyList()
+
+    val fields = listOf(
+        Place.Field.ID,
+        Place.Field.NAME,
+        Place.Field.PHOTO_METADATAS,
+        Place.Field.LAT_LNG
+    )
+
+    // Launch one async job per place ID (in IO dispatcher)
+    val jobs = placeIds.map { id ->
+        async(Dispatchers.IO) {
+            // Fetch place
+            val place = runCatching {
+                client.fetchPlace(
+                    FetchPlaceRequest.builder(id, fields).build()
+                ).await().place
+            }.getOrNull() ?: return@async null
+
+            val meta: PhotoMetadata? = place.photoMetadatas?.firstOrNull()
+
+            // Fetch a smaller photo (faster) if available
+            val bmp = if (meta != null) {
+                runCatching {
+                    client.fetchPhoto(
+                        FetchPhotoRequest
+                            .builder(meta)
+                            .setMaxWidth(600)   // was 1280
+                            .setMaxHeight(400)  // was 720
+                            .build()
+                    ).await().bitmap
+                }.getOrNull()
+            } else {
+                null
+            }
+
+            val d = place.latLng?.let { ll ->
+                distanceMeters(
+                    center.latitude,
+                    center.longitude,
+                    ll.latitude,
+                    ll.longitude
+                ).roundToInt()
+            }
+
+            val title = place.name ?: return@async null
+
+            UiPlace(
+                id = id,
+                title = title,
+                photo = bmp,
+                distanceMeters = d
+            )
+        }
     }
-    return out.sortedBy { it.distanceMeters ?: Int.MAX_VALUE }
+
+    // Wait for all async jobs to finish, drop nulls, and sort by distance
+    jobs.mapNotNull { it.await() }
+        .sortedBy { it.distanceMeters ?: Int.MAX_VALUE }
 }
 
 @Composable
@@ -133,33 +217,67 @@ private fun FavoriteCard(
                 Image(
                     bitmap = place.photo.asImageBitmap(),
                     contentDescription = place.title,
-                    modifier = Modifier.fillMaxWidth().height(200.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp),
                     contentScale = ContentScale.Crop
                 )
             } else {
-                Box(Modifier.fillMaxWidth().height(200.dp).background(Color(0xFFEAEAEA)))
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(200.dp)
+                        .background(Color(0xFFEAEAEA))
+                )
             }
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text(place.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        place.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                     place.distanceMeters?.let {
-                        Text(if (it >= 1000) String.format("%.1f km away", it / 1000.0) else "$it m away", style = MaterialTheme.typography.bodySmall)
+                        val label =
+                            if (it >= 1000) String.format("%.1f km away", it / 1000.0)
+                            else "$it m away"
+                        Text(
+                            label,
+                            style = MaterialTheme.typography.bodySmall
+                        )
                     }
                 }
                 IconButton(onClick = onRemove) {
-                    Icon(Icons.Filled.Delete, contentDescription = "Remove", tint = Color.Red)
+                    Icon(
+                        Icons.Filled.Delete,
+                        contentDescription = "Remove",
+                        tint = Color.Red
+                    )
                 }
             }
         }
     }
 }
 
-private fun distanceMeters(aLat: Double, aLon: Double, bLat: Double, bLon: Double): Double {
+private fun distanceMeters(
+    aLat: Double,
+    aLon: Double,
+    bLat: Double,
+    bLon: Double
+): Double {
     val R = 6371000.0
-    val dLat = Math.toRadians(bLat - aLat); val dLon = Math.toRadians(bLon - aLon)
-    val x = sin(dLat/2)*sin(dLat/2) + cos(Math.toRadians(aLat))*cos(Math.toRadians(bLat))*sin(dLon/2)*sin(dLon/2)
-    return R * 2 * atan2(sqrt(x), sqrt(1-x))
+    val dLat = Math.toRadians(bLat - aLat)
+    val dLon = Math.toRadians(bLon - aLon)
+    val x = sin(dLat / 2) * sin(dLat / 2) +
+            cos(Math.toRadians(aLat)) *
+            cos(Math.toRadians(bLat)) *
+            sin(dLon / 2) * sin(dLon / 2)
+    return R * 2 * atan2(sqrt(x), sqrt(1 - x))
 }

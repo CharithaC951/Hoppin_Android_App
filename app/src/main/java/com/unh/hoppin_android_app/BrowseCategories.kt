@@ -104,7 +104,7 @@ fun BrowseCategoriesSection(
             style = MaterialTheme.typography.headlineSmall,
             fontSize = 20.sp,
             fontWeight = FontWeight.Bold,
-            color = Color.Black,
+            color = MaterialTheme.colorScheme.onBackground,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
         )
 

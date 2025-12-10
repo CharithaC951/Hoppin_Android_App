@@ -284,53 +284,6 @@ class RecommendationViewModel : ViewModel() {
     }
 
     /**
-     * Builds recommendation sections from previously fetched data (`lastAll`),
-     * avoiding new network calls. Used for local filtering or sorting.
-     */
-    fun deriveLocally(
-        center: LatLng,
-        categories: List<Category>,
-        perCategory: Int = 4
-    ) {
-        if (lastAll.isEmpty()) return
-        viewModelScope.launch(Dispatchers.IO) {
-            val sections = mutableListOf<RecommendationSection>()
-
-            for (cat in categories) {
-                val items = mutableListOf<RecommendationItem>()
-                var taken = 0
-                for (place in lastAll) {
-                    if (!matches(cat, place)) continue
-                    val item = offlineItem(place, center)
-                    if (item != null) {
-                        items += item
-                        taken++
-                        if (taken >= perCategory) break
-                    }
-                }
-                if (items.isNotEmpty()) sections += RecommendationSection(cat, items)
-            }
-
-            val flatItems = sections.flatMap { sec ->
-                sec.items.map { it ->
-                    RecommendationItemWithCategory(
-                        placeId = it.placeId,
-                        categoryTitle = sec.category.title,
-                        title = it.title,
-                        bitmap = it.bitmap,
-                        distanceMeters = it.distanceMeters
-                    )
-                }
-            }
-
-            // Also refresh cache when we derive locally
-            RecommendationMemoryCache.put(center, categories, sections, flatItems)
-
-            _ui.value = _ui.value.copy(sections = sections, flatItems = flatItems)
-        }
-    }
-
-    /**
      * Ensures the Places SDK is initialized before making any API calls.
      */
     private fun ensurePlacesInitialized(context: Context, apiKey: String?) {
@@ -384,7 +337,7 @@ class RecommendationViewModel : ViewModel() {
                     }.getOrNull()
 
                     if (bmp != null) {
-                        RecommendationPhotoCache.put(id, bmp!!)
+                        RecommendationPhotoCache.put(id, bmp)
                     }
                 }
             }
@@ -399,35 +352,17 @@ class RecommendationViewModel : ViewModel() {
     }
 
     /**
-     * Creates an offline recommendation item (no network call or image fetching).
-     */
-    private fun offlineItem(place: Place, center: LatLng): RecommendationItem? {
-        val id: String = place.id ?: return null
-        val title: String = place.name ?: return null
-        val ll = place.latLng ?: return null
-        val distance = haversine(center.latitude, center.longitude, ll.latitude, ll.longitude)
-        val cachedBmp = RecommendationPhotoCache.get(id)
-
-        return RecommendationItem(
-            placeId = id,
-            title = title,
-            bitmap = cachedBmp,
-            distanceMeters = distance
-        )
-    }
-
-    /**
      * Calculates distance between two coordinates using the Haversine formula.
      * @return Distance in meters.
      */
     private fun haversine(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
-        val R = 6371000.0 // Earth radius in meters
+        val r = 6371000.0 // Earth radius in meters
         val dLat = Math.toRadians(lat2 - lat1)
         val dLon = Math.toRadians(lon2 - lon1)
         val a = sin(dLat / 2).pow(2.0) +
                 cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) *
                 sin(dLon / 2).pow(2.0)
         val c = 2 * atan2(sqrt(a), sqrt(1 - a))
-        return R * c
+        return r * c
     }
 }

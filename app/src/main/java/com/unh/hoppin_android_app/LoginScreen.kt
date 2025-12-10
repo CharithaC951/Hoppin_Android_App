@@ -7,6 +7,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.ClickableText
@@ -46,18 +48,25 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import androidx.compose.foundation.clickable
 
 @Composable
 fun LoginScreen(navController: NavController) {
     Box(modifier = Modifier.fillMaxSize()) {
-        // UPDATE: Using your specific background image name
-        Image(
-            painter = painterResource(id = R.drawable.test_bg),
-            contentDescription = "Background",
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop
-        )
+        if (isSystemInDarkTheme()) {
+            Image(
+                painter = painterResource(id = R.drawable.dark_bg),
+                contentDescription = "Background",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            Image(
+                painter = painterResource(id = R.drawable.test_bg),
+                contentDescription = "Background",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        }
 
         val authNavController = rememberNavController()
 
@@ -84,25 +93,27 @@ fun LoginScreen(navController: NavController) {
         }
     }
 }
+
 @Composable
 private fun SignInUI(
     onNavigateToCreateAccount: () -> Unit,
     onNavigateToForgotPassword: () -> Unit,
     onLoginSuccess: (userName: String) -> Unit
 ) {
-    // --- State and Logic (Unchanged) ---
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
+
     val auth = FirebaseAuth.getInstance()
     val db = FirebaseFirestore.getInstance()
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+
+    // Google Sign-In
     val googleSignInLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult(),
         onResult = { result ->
-            // ... (Keep your existing Google Sign In logic here) ...
             val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
             try {
                 val account = task.getResult(ApiException::class.java)!!
@@ -113,46 +124,66 @@ private fun SignInUI(
                         val firebaseUser = auth.currentUser
                         if (firebaseUser != null) {
                             val userRef = db.collection("users").document(firebaseUser.uid)
-                            userRef.get().addOnSuccessListener { document ->
-                                if (!document.exists()) {
-                                    val displayName = firebaseUser.displayName ?: firebaseUser.email ?: "User"
-                                    val newUser = hashMapOf(
-                                        "name" to displayName,
-                                        "displayName" to firebaseUser.displayName,
-                                        "email" to firebaseUser.email,
-                                        "photoUrl" to firebaseUser.photoUrl.toString(),
-                                        "createdAt" to com.google.firebase.Timestamp.now(),
-                                        "unreadNotificationCount" to 0,
-                                        "savedPlaceIds" to emptyList<String>(),
-                                        "favoritePlaceIds" to emptyList<String>()
-                                    )
-                                    userRef.set(newUser, SetOptions.merge())
-                                        .addOnSuccessListener {
-                                            scope.launch {
-                                                try {
-                                                    StreakService.dailyCheckInFor(firebaseUser.uid)
-                                                } catch (_: Exception) { }
+                            userRef.get()
+                                .addOnSuccessListener { document ->
+                                    val displayName = firebaseUser.displayName
+                                        ?: firebaseUser.email
+                                        ?: "User"
+
+                                    if (!document.exists()) {
+                                        val newUser = hashMapOf(
+                                            "name" to displayName,
+                                            "displayName" to firebaseUser.displayName,
+                                            "email" to firebaseUser.email,
+                                            "photoUrl" to firebaseUser.photoUrl.toString(),
+                                            "createdAt" to com.google.firebase.Timestamp.now(),
+                                            "unreadNotificationCount" to 0,
+                                            "savedPlaceIds" to emptyList<String>(),
+                                            "favoritePlaceIds" to emptyList<String>()
+                                        )
+                                        userRef.set(newUser, SetOptions.merge())
+                                            .addOnSuccessListener {
+                                                // ✅ Navigate immediately, update streak in background
                                                 isLoading = false
-                                                onLoginSuccess(firebaseUser.displayName ?: "User")
+                                                onLoginSuccess(displayName)
+                                                scope.launch {
+                                                    try {
+                                                        StreakService.dailyCheckInFor(firebaseUser.uid)
+                                                    } catch (_: Exception) {
+                                                    }
+                                                }
+                                            }
+                                            .addOnFailureListener { e ->
+                                                isLoading = false
+                                                scope.launch {
+                                                    snackbarHostState.showSnackbar(
+                                                        "Failed to create profile: ${e.message}"
+                                                    )
+                                                }
+                                            }
+                                    } else {
+                                        // Existing user: navigate first
+                                        isLoading = false
+                                        onLoginSuccess(displayName)
+                                        scope.launch {
+                                            try {
+                                                StreakService.dailyCheckInFor(firebaseUser.uid)
+                                            } catch (_: Exception) {
                                             }
                                         }
-                                        .addOnFailureListener { e ->
-                                            isLoading = false
-                                            scope.launch { snackbarHostState.showSnackbar("Failed to create profile: ${e.message}") }
-                                        }
-                                } else {
-                                    scope.launch {
-                                        try {
-                                            StreakService.dailyCheckInFor(firebaseUser.uid)
-                                        } catch (_: Exception) { }
-                                        isLoading = false
-                                        onLoginSuccess(firebaseUser.displayName ?: "User")
                                     }
                                 }
-                            }.addOnFailureListener { e ->
-                                isLoading = false
-                                onLoginSuccess(firebaseUser.displayName ?: "User")
-                            }
+                                .addOnFailureListener {
+                                    // If profile fetch fails, still let them in
+                                    val displayName = firebaseUser.displayName
+                                        ?: firebaseUser.email
+                                        ?: "User"
+                                    isLoading = false
+                                    onLoginSuccess(displayName)
+                                }
+                        } else {
+                            isLoading = false
+                            scope.launch { snackbarHostState.showSnackbar("Authentication failed.") }
                         }
                     } else {
                         isLoading = false
@@ -166,7 +197,6 @@ private fun SignInUI(
         }
     )
 
-    // --- Updated UI Layout ---
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -183,21 +213,19 @@ private fun SignInUI(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        // "L O G I N" Text - Updated to White and Spaced to match screenshot
         Text(
             text = "LOGIN",
             fontSize = 34.sp,
             fontWeight = FontWeight.Bold,
             color = Color.Black,
-            letterSpacing = 8.sp, // Adds spacing between letters
+            letterSpacing = 8.sp,
             fontFamily = FontFamily.Serif,
             fontStyle = FontStyle.Italic
         )
 
-        // Reduced Spacer (Was 48.dp) -> Pulls inputs higher
         Spacer(modifier = Modifier.height(10.dp))
 
-        // Email Field
+        // Email
         TextField(
             value = email,
             onValueChange = { email = it },
@@ -206,7 +234,7 @@ private fun SignInUI(
             singleLine = true,
             shape = RoundedCornerShape(10.dp),
             colors = TextFieldDefaults.colors(
-                focusedContainerColor = Color.White.copy(alpha = 0.9f), // Semi-transparent
+                focusedContainerColor = Color.White.copy(alpha = 0.9f),
                 unfocusedContainerColor = Color.White.copy(alpha = 0.9f),
                 focusedIndicatorColor = Color.Transparent,
                 unfocusedIndicatorColor = Color.Transparent,
@@ -217,7 +245,7 @@ private fun SignInUI(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Password Field
+        // Password
         TextField(
             value = password,
             onValueChange = { password = it },
@@ -237,7 +265,6 @@ private fun SignInUI(
             )
         )
 
-        // Reduced Spacer (Was 32.dp) -> Pulls Sign In button higher
         Spacer(modifier = Modifier.height(24.dp))
 
         if (isLoading) {
@@ -246,41 +273,69 @@ private fun SignInUI(
             Button(
                 onClick = {
                     if (email.isBlank() || password.isBlank()) {
-                        scope.launch { snackbarHostState.showSnackbar("Email and password cannot be empty.") }
+                        scope.launch {
+                            snackbarHostState.showSnackbar("Email and password cannot be empty.")
+                        }
                         return@Button
                     }
                     isLoading = true
                     auth.signInWithEmailAndPassword(email.trim(), password.trim())
                         .addOnCompleteListener { task ->
-                            // ... (Same login logic as before) ...
                             if (task.isSuccessful) {
                                 val userId = auth.currentUser?.uid
                                 if (userId != null) {
                                     db.collection("users").document(userId).get()
                                         .addOnSuccessListener { document ->
-                                            val userName = document.getString("name") ?: auth.currentUser?.displayName ?: "User"
+                                            val userName = document.getString("name")
+                                                ?: auth.currentUser?.displayName
+                                                ?: "User"
+
+                                            // ✅ Navigate immediately
+                                            isLoading = false
+                                            onLoginSuccess(userName)
+
+                                            // ✅ Streak update in background
                                             scope.launch {
-                                                try { StreakService.dailyCheckInFor(userId) } catch (_: Exception) { }
-                                                isLoading = false
-                                                onLoginSuccess(userName)
+                                                try {
+                                                    StreakService.dailyCheckInFor(userId)
+                                                } catch (_: Exception) {
+                                                }
                                             }
                                         }
                                         .addOnFailureListener {
+                                            // If user doc fails, still let user in quickly
+                                            val userName = auth.currentUser?.displayName ?: "User"
                                             isLoading = false
-                                            onLoginSuccess(auth.currentUser?.displayName ?: "User")
+                                            onLoginSuccess(userName)
                                         }
+                                } else {
+                                    isLoading = false
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar(
+                                            "Login succeeded but user id missing."
+                                        )
+                                    }
                                 }
                             } else {
-                                scope.launch { snackbarHostState.showSnackbar("Invalid username or password.") }
+                                scope.launch {
+                                    snackbarHostState.showSnackbar("Invalid username or password.")
+                                }
                                 isLoading = false
                             }
                         }
                 },
-                modifier = Modifier.fillMaxWidth().height(50.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
                 shape = RoundedCornerShape(30.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF023C85))
             ) {
-                Text("Sign in", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    "Sign in",
+                    color = Color.White,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
 
@@ -296,12 +351,11 @@ private fun SignInUI(
             fontStyle = FontStyle.Italic
         )
 
-        // Reduced Spacer (Was 32.dp) -> Pulls bottom section higher
         Spacer(modifier = Modifier.height(20.dp))
         OrSeparator()
         Spacer(modifier = Modifier.height(20.dp))
 
-        // --- UPDATED: Google Button with Low Transparency ---
+        // Google sign in button
         Button(
             onClick = {
                 val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
@@ -313,9 +367,10 @@ private fun SignInUI(
                     googleSignInLauncher.launch(googleSignInClient.signInIntent)
                 }
             },
-            modifier = Modifier.fillMaxWidth().height(50.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp),
             shape = RoundedCornerShape(30.dp),
-            // Changed alpha to 0.8f to make it semi-transparent
             colors = ButtonDefaults.buttonColors(containerColor = Color.White),
             elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
         ) {
@@ -326,23 +381,32 @@ private fun SignInUI(
                     modifier = Modifier.size(24.dp)
                 )
                 Spacer(modifier = Modifier.width(12.dp))
-                Text(text = "Sign in with Google", color = Color.Black, fontWeight = FontWeight.Bold)
+                Text(
+                    text = "Sign in with Google",
+                    color = Color.Black,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // --- UPDATED: Sign Up Button Color & Position ---
-        // Reduced spacers above mean this button will now sit higher up.
         Button(
             onClick = onNavigateToCreateAccount,
-            modifier = Modifier.fillMaxWidth().height(50.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp),
             shape = RoundedCornerShape(30.dp),
-            // Changed color to Cyan to match screenshot
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF023C85))
         ) {
-            Text("Sign up", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Text(
+                "Sign up",
+                color = Color.White,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold
+            )
         }
+
         SnackbarHost(
             hostState = snackbarHostState,
             modifier = Modifier.align(Alignment.CenterHorizontally)
@@ -350,7 +414,6 @@ private fun SignInUI(
     }
 }
 
-// --- Unchanged Composables Below ---
 @Composable
 private fun CreateAccountUI(onNavigateBack: () -> Unit) {
     var name by remember { mutableStateOf("") }
@@ -359,12 +422,12 @@ private fun CreateAccountUI(onNavigateBack: () -> Unit) {
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
+
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var showSuccessDialog by remember { mutableStateOf(false) }
 
-    // Define the common styling for text fields to ensure consistency
     val textFieldColors = TextFieldDefaults.colors(
         focusedContainerColor = Color.White,
         unfocusedContainerColor = Color.White,
@@ -396,8 +459,11 @@ private fun CreateAccountUI(onNavigateBack: () -> Unit) {
                 title = {},
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        // Changed Icon color to Black so it stands out against the light sky
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.Black)
+                        Icon(
+                            Icons.Default.ArrowBack,
+                            contentDescription = "Back",
+                            tint = Color.Black
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
@@ -412,12 +478,11 @@ private fun CreateAccountUI(onNavigateBack: () -> Unit) {
                 .padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Title Text
             Text(
                 "WELCOME TO HOPPIN",
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.Black.copy(alpha = 0.8f), // Darker for visibility on sky
+                color = Color.Black.copy(alpha = 0.8f),
                 fontFamily = FontFamily.Serif,
                 fontStyle = FontStyle.Italic
             )
@@ -429,16 +494,13 @@ private fun CreateAccountUI(onNavigateBack: () -> Unit) {
                 color = Color.Black.copy(alpha = 0.8f),
                 fontFamily = FontFamily.Serif,
                 fontStyle = FontStyle.Italic
-
             )
             Spacer(modifier = Modifier.height(24.dp))
 
-            // -- Input Fields --
-            // Changed from OutlinedTextField to TextField for better visibility
             TextField(
                 value = name,
                 onValueChange = { name = it },
-                placeholder = { Text("Name") }, // Using placeholder instead of label looks cleaner on forms
+                placeholder = { Text("Name") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 colors = textFieldColors,
@@ -495,17 +557,24 @@ private fun CreateAccountUI(onNavigateBack: () -> Unit) {
                 shape = textFieldShape
             )
             Spacer(modifier = Modifier.height(32.dp))
+
             if (isLoading) {
                 CircularProgressIndicator(color = Color.White)
             } else {
                 Button(
                     onClick = {
                         if (name.isBlank() || email.isBlank() || password.isBlank()) {
-                            scope.launch { snackbarHostState.showSnackbar("Name, Email and password cannot be empty.") }
+                            scope.launch {
+                                snackbarHostState.showSnackbar(
+                                    "Name, Email and password cannot be empty."
+                                )
+                            }
                             return@Button
                         }
                         if (password != confirmPassword) {
-                            scope.launch { snackbarHostState.showSnackbar("Passwords do not match.") }
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Passwords do not match.")
+                            }
                             return@Button
                         }
 
@@ -517,7 +586,11 @@ private fun CreateAccountUI(onNavigateBack: () -> Unit) {
                                     val userId = auth.currentUser?.uid
                                     if (userId != null) {
                                         val db = FirebaseFirestore.getInstance()
-                                        val userMap = hashMapOf("name" to name.trim(), "email" to email.trim(), "phoneNumber" to phoneNumber.trim())
+                                        val userMap = hashMapOf(
+                                            "name" to name.trim(),
+                                            "email" to email.trim(),
+                                            "phoneNumber" to phoneNumber.trim()
+                                        )
                                         db.collection("users").document(userId).set(userMap)
                                             .addOnSuccessListener {
                                                 isLoading = false
@@ -525,24 +598,42 @@ private fun CreateAccountUI(onNavigateBack: () -> Unit) {
                                             }
                                             .addOnFailureListener { e ->
                                                 isLoading = false
-                                                scope.launch { snackbarHostState.showSnackbar("Failed to save user details: ${e.message}") }
+                                                scope.launch {
+                                                    snackbarHostState.showSnackbar(
+                                                        "Failed to save user details: ${e.message}"
+                                                    )
+                                                }
                                             }
                                     } else {
                                         isLoading = false
-                                        scope.launch { snackbarHostState.showSnackbar("Account created but user id missing.") }
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar(
+                                                "Account created but user id missing."
+                                            )
+                                        }
                                     }
                                 } else {
                                     isLoading = false
-                                    scope.launch { snackbarHostState.showSnackbar("Account creation failed: ${task.exception?.message}") }
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar(
+                                            "Account creation failed: ${task.exception?.message}"
+                                        )
+                                    }
                                 }
                             }
                     },
-                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
                     shape = RoundedCornerShape(30.dp),
-                    // Matched the button color to your Login Screen (Cyan)
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xff023C85))
                 ) {
-                    Text("Create Account", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        "Create Account",
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
             TermsAndPrivacyText()
@@ -593,11 +684,13 @@ private fun OrSeparator() {
 @Composable
 private fun TermsAndPrivacyText() {
     val annotatedString = buildAnnotatedString {
-        withStyle(style = SpanStyle(
-            color = Color.Black,       // Change to Color.Black if you have a light background
-            fontWeight = FontWeight.Normal,
-            fontSize = 14.sp
-        )) {
+        withStyle(
+            style = SpanStyle(
+                color = Color.Black,
+                fontWeight = FontWeight.Normal,
+                fontSize = 14.sp
+            )
+        ) {
             append("By clicking continue, you agree to our ")
         }
         pushStringAnnotation(tag = "TOS", annotation = "terms_of_service_url")
@@ -606,7 +699,7 @@ private fun TermsAndPrivacyText() {
         }
         pop()
 
-        withStyle(style = SpanStyle(color = Color.Black)) {   // <-- change "and" color
+        withStyle(style = SpanStyle(color = Color.Black)) {
             append(" and ")
         }
         pushStringAnnotation(tag = "PRIVACY", annotation = "privacy_policy_url")
@@ -615,7 +708,16 @@ private fun TermsAndPrivacyText() {
         }
         pop()
     }
-    ClickableText(text = annotatedString, onClick = { }, style = LocalTextStyle.current.copy(textAlign = TextAlign.Center, color = Color.Gray, fontSize = 12.sp), modifier = Modifier.padding(horizontal = 16.dp))
+    ClickableText(
+        text = annotatedString,
+        onClick = { },
+        style = LocalTextStyle.current.copy(
+            textAlign = TextAlign.Center,
+            color = Color.Gray,
+            fontSize = 12.sp
+        ),
+        modifier = Modifier.padding(horizontal = 16.dp)
+    )
 }
 
 @Preview(showBackground = true, name = "Sign In UI")

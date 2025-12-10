@@ -13,6 +13,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -65,15 +66,26 @@ class MainActivity : ComponentActivity() {
         splash.setKeepOnScreenCondition { false }
 
         setContent {
-            Hoppin_Android_AppTheme {
+            Hoppin_Android_AppTheme() {
                 // Global background image for the entire app
                 Box(modifier = Modifier.fillMaxSize()) {
-                    Image(
-                        painter = painterResource(id = R.drawable.test_bg),
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
+                    if(isSystemInDarkTheme())
+                    {
+                        Image(
+                            painter = painterResource(id = R.drawable.dark_bg),
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+                    else {
+                        Image(
+                            painter = painterResource(id = R.drawable.test_bg),
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
 
                     // All app content sits on top of the background
                     Surface(
