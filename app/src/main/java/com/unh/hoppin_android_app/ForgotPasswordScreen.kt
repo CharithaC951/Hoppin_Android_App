@@ -110,7 +110,7 @@ fun ForgotPasswordScreen(
                 TextField(
                     value = email,
                     onValueChange = { email = it },
-                    placeholder = { Text("example@domain.com") }, // Placeholder looks better than label here
+                    placeholder = { Text("Enter your email address") }, // Placeholder looks better than label here
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Email),
