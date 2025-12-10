@@ -521,7 +521,11 @@ private fun CreateAccountUI(onNavigateBack: () -> Unit) {
                                         db.collection("users").document(userId).set(userMap)
                                             .addOnSuccessListener {
                                                 isLoading = false
-                                                showSuccessDialog = true
+                                                scope.launch {
+                                                    snackbarHostState.showSnackbar("Account created successfully.")
+                                                    delay(150)
+                                                    onNavigateBack()
+                                                }
                                             }
                                             .addOnFailureListener { e ->
                                                 isLoading = false
