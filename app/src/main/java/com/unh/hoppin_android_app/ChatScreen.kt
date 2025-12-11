@@ -6,7 +6,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.*
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
@@ -16,6 +15,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
@@ -35,7 +36,9 @@ import com.unh.hoppin_android_app.viewmodels.LocationViewModel
 import com.unh.hoppin_android_app.viewmodels.ChatViewModel
 import kotlin.collections.reversed
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.ui.graphics.Color
@@ -145,8 +148,6 @@ fun ChatScreen(
 fun MessageBubble(message: ChatMessage) {
     val isBot = message.author == Author.BOT
     val horizontalArrangement = if (isBot) Arrangement.Start else Arrangement.End
-    val bubbleColor = if (isBot) Color(0xfff8f0e3) else Color.Black
-    val textColor = if (isBot) Color.Black else Color.White
     AnimatedVisibility(
         visible = true,
         enter = fadeIn() + slideInVertically(initialOffsetY = { it / 4 })
@@ -171,11 +172,11 @@ fun MessageBubble(message: ChatMessage) {
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(16.dp))
-                        .background(bubbleColor.copy(alpha = 0.85f))
+                        .background(Color(0xfff8f0e3))
                         .padding(horizontal = 16.dp, vertical = 10.dp)) {
                     Text(
                         text = message.text,
-                        color = textColor,
+                        color = Color.Black,
                         fontSize = 16.sp
                     )
                 }
@@ -231,7 +232,7 @@ fun PlacesList(places: List<Place>) {
 fun PlaceCard(place: Place) {
     Card(
         modifier = Modifier.width(220.dp),
-        elevation = 4.dp,
+        elevation = CardDefaults.cardElevation(4.dp),
         shape = RoundedCornerShape(12.dp)
     ) {
         Column(modifier = Modifier.padding(12.dp)) {

@@ -508,7 +508,8 @@ fun PlaceDetailsScreen(
                                     Text(
                                         "⭐ ${"%.1f".format(r)}",
                                         style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Medium
+                                        fontWeight = FontWeight.Medium,
+                                        color = Color.Black
                                     )
                                     ratingsTotal?.let { t ->
                                         Text(
@@ -834,7 +835,8 @@ fun PlaceDetailsScreen(
                                     onValueChange = { yourName = it },
                                     modifier = Modifier.fillMaxWidth(),
                                     label = { Text("Your name (optional)",color = Color(0xff333333)) },
-                                    singleLine = true
+                                    singleLine = true,
+                                    colors = OutlinedTextFieldDefaults.colors(Color.Black)
                                 )
 
                                 Spacer(Modifier.height(10.dp))
@@ -860,7 +862,8 @@ fun PlaceDetailsScreen(
                                     label = { Text("Add your comment",color = Color(0xff333333)) },
                                     placeholder = { Text("What did you like? Any tips for others?") },
                                     minLines = 3,
-                                    maxLines = 6
+                                    maxLines = 6,
+                                    colors = OutlinedTextFieldDefaults.colors(Color.Black)
                                 )
 
                                 Spacer(Modifier.height(10.dp))
@@ -870,7 +873,7 @@ fun PlaceDetailsScreen(
                                     enabled = !mySubmitting && myRating in 1..5 && myReviewText.isNotBlank(),
                                     modifier = Modifier.align(Alignment.End)
                                 ) {
-                                    Text(if (mySubmitting) "Posting…" else "Post")
+                                    Text(if (mySubmitting) "Posting…" else "Post", color = Color.Black)
                                 }
                             }
                         }
