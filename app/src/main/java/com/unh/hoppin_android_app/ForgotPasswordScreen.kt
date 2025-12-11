@@ -1,6 +1,5 @@
 package com.unh.hoppin_android_app
 
-import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,17 +32,18 @@ fun ForgotPasswordScreen(
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     var email by remember { mutableStateOf("") }
+    val snackbarHostState = remember { SnackbarHostState() }
 
     // Show toast messages and navigate back on success
     LaunchedEffect(uiState.successMessage, uiState.errorMessage) {
         uiState.successMessage?.let { message ->
-            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+            snackbarHostState.showSnackbar(message)
             viewModel.clearMessages()
             delay(1500)
             navController.popBackStack()
         }
         uiState.errorMessage?.let { message ->
-            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+            snackbarHostState.showSnackbar(message)
             viewModel.clearMessages()
         }
     }
@@ -69,7 +69,8 @@ fun ForgotPasswordScreen(
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
                 )
             },
-            containerColor = Color.Transparent
+            containerColor = Color.Transparent,
+            snackbarHost = { SnackbarHost(snackbarHostState) }
         ) { paddingValues ->
             Column(
                 modifier = Modifier

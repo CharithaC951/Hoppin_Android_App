@@ -212,4 +212,15 @@ object TripItineraryRepositoryFirebase {
             .delete()
             .await()
     }
+
+    // Read from /itineraries_all (no need for current user's uid)
+    suspend fun getGlobalItinerary(itineraryId: String): TripItinerary? {
+        val doc = db.collection(COLLECTION_ALL_ITINERARIES)
+            .document(itineraryId)
+            .get()
+            .await()
+
+        return doc.toObject(TripItinerary::class.java)?.copy(id = doc.id)
+    }
+
 }

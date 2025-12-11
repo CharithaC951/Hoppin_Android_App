@@ -40,6 +40,7 @@ import kotlin.math.*
 @Composable
 fun ItineraryDetailScreen(
     itineraryId: String,
+    source: String = "user",
     onBack: () -> Unit,
     onPlaceClick: (String) -> Unit
 ) {
@@ -54,7 +55,22 @@ fun ItineraryDetailScreen(
 
     var isPublishing by remember { mutableStateOf(false) }
 
-    val itinerary = itineraries.find { it.id == itineraryId }
+    var itinerary by remember { mutableStateOf<TripItinerary?>(null) }
+    var isItineraryLoading by remember { mutableStateOf(true) }
+
+    // 🔹 NEW: decide where to load from based on `source`
+    LaunchedEffect(itineraryId, source, itineraries) {
+        isItineraryLoading = true
+
+        itinerary = if (source == "global") {
+            TripItineraryRepositoryFirebase.getGlobalItinerary(itineraryId)
+        } else {
+            itineraries.find { it.id == itineraryId }
+        }
+
+        isItineraryLoading = false
+    }
+
 
     var placesUi by remember { mutableStateOf<List<UiPlace>>(emptyList()) }
     var loading by remember { mutableStateOf(false) }
@@ -152,7 +168,7 @@ fun ItineraryDetailScreen(
                 actions = {
                     IconButton(
                         onClick = { publishItineraryToCommon() },
-                        enabled = itinerary != null && !isPublishing && itinerary.placeIds.isNotEmpty()
+                        enabled = itinerary != null && !isPublishing && itinerary!!.placeIds.isNotEmpty()
                     ) {
                         Icon(
                             imageVector = Icons.Filled.Share,
@@ -175,11 +191,17 @@ fun ItineraryDetailScreen(
         ) {
 
             when {
-                itinerary == null -> Text(
-                    "This itinerary could not be found.",
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.align(Alignment.Center)
-                )
+                isItineraryLoading -> {
+                    CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                }
+
+                itinerary == null -> {
+                    Text(
+                        "This itinerary could not be found.",
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.align(Alignment.Center)
+                    )
+                }
 
                 loading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
 
@@ -205,13 +227,13 @@ fun ItineraryDetailScreen(
 
                         item {
                             Text(
-                                itinerary.name,
+                                itinerary!!.name,
                                 style = MaterialTheme.typography.headlineSmall,
                                 fontWeight = FontWeight.Bold
                             )
-                            if (itinerary.description.isNotBlank()) {
+                            if (itinerary!!.description.isNotBlank()) {
                                 Spacer(Modifier.height(4.dp))
-                                Text(itinerary.description)
+                                Text(itinerary!!.description)
                                 Spacer(Modifier.height(12.dp))
                             }
                         }
@@ -220,6 +242,7 @@ fun ItineraryDetailScreen(
                             PlaceCardMinimal(
                                 place = place,
                                 isFavorited = false,
+                                removeIcon =  true,
                                 onClick = { onPlaceClick(place.id) },
                                 onToggleFavorite = { }
                             )

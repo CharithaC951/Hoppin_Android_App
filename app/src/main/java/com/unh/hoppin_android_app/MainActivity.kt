@@ -389,10 +389,11 @@ class MainActivity : ComponentActivity() {
                                         FeedScreen(
                                             onBack = { navController.popBackStack() },
                                             onOpenItinerary = { itineraryId ->
-                                                navController.navigate("itinerary/$itineraryId")
+                                                navController.navigate("itinerary/$itineraryId?source=global")
                                             }
                                         )
                                     }
+
 
                                     composable("favorites") {
                                         FavoritesScreen(
@@ -423,22 +424,28 @@ class MainActivity : ComponentActivity() {
                                     }
 
                                     composable(
-                                        "itinerary/{itineraryId}",
+                                        route = "itinerary/{itineraryId}?source={source}",
                                         arguments = listOf(
-                                            navArgument("itineraryId") { type = NavType.StringType }
+                                            navArgument("itineraryId") { type = NavType.StringType },
+                                            navArgument("source") {
+                                                type = NavType.StringType
+                                                defaultValue = "user"   // default: your own itineraries
+                                            }
                                         )
                                     ) { backStackEntry ->
-                                        val itineraryId =
-                                            backStackEntry.arguments?.getString("itineraryId")
-                                                ?: ""
+                                        val itineraryId = backStackEntry.arguments?.getString("itineraryId") ?: ""
+                                        val source = backStackEntry.arguments?.getString("source") ?: "user"
+
                                         ItineraryDetailScreen(
                                             itineraryId = itineraryId,
+                                            source = source,
                                             onBack = { navController.popBackStack() },
                                             onPlaceClick = { placeId ->
                                                 navController.navigate("place/$placeId")
                                             }
                                         )
                                     }
+
                                 }
                             }
                         } else {
@@ -587,11 +594,10 @@ class MainActivity : ComponentActivity() {
                                     FeedScreen(
                                         onBack = { navController.popBackStack() },
                                         onOpenItinerary = { itineraryId ->
-                                            navController.navigate("itinerary/$itineraryId")
+                                            navController.navigate("itinerary/$itineraryId?source=global")
                                         }
                                     )
                                 }
-
                                 composable("favorites") {
                                     FavoritesScreen(
                                         onBack = { navController.popBackStack() },
@@ -615,27 +621,33 @@ class MainActivity : ComponentActivity() {
                                     TripItinerariesScreen(
                                         onBack = { navController.popBackStack() },
                                         onOpenItinerary = { itineraryId ->
-                                            navController.navigate("itinerary/$itineraryId")
+                                            navController.navigate("itinerary/$itineraryId?source=user")
                                         }
                                     )
                                 }
                                 composable(
-                                    "itinerary/{itineraryId}",
+                                    route = "itinerary/{itineraryId}?source={source}",
                                     arguments = listOf(
-                                        navArgument("itineraryId") { type = NavType.StringType }
+                                        navArgument("itineraryId") { type = NavType.StringType },
+                                        navArgument("source") {
+                                            type = NavType.StringType
+                                            defaultValue = "user"   // default: your own itineraries
+                                        }
                                     )
                                 ) { backStackEntry ->
-                                    val itineraryId =
-                                        backStackEntry.arguments?.getString("itineraryId")
-                                            ?: ""
+                                    val itineraryId = backStackEntry.arguments?.getString("itineraryId") ?: ""
+                                    val source = backStackEntry.arguments?.getString("source") ?: "user"
+
                                     ItineraryDetailScreen(
                                         itineraryId = itineraryId,
+                                        source = source,
                                         onBack = { navController.popBackStack() },
                                         onPlaceClick = { placeId ->
                                             navController.navigate("place/$placeId")
                                         }
                                     )
                                 }
+
                             }
                         }
                     }

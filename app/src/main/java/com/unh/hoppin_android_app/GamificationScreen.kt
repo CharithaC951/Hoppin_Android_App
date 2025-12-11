@@ -110,8 +110,7 @@ fun GamificationScreen(
                     Text(
                         "Gamification",
                         fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF3E2723)
+                        fontWeight = FontWeight.Bold
                     )
                 },
                 navigationIcon = {

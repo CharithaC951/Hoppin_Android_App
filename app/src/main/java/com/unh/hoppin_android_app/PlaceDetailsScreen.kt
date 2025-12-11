@@ -785,7 +785,8 @@ fun PlaceDetailsScreen(
                                                 (1..5).forEach { i ->
                                                     Icon(
                                                         imageVector = if (i <= r.rating) Icons.Filled.Star else Icons.Outlined.StarBorder,
-                                                        contentDescription = null
+                                                        contentDescription = null,
+                                                        tint = Color(0xffecc440)
                                                     )
                                                 }
                                             }
@@ -834,10 +835,19 @@ fun PlaceDetailsScreen(
                                     value = yourName,
                                     onValueChange = { yourName = it },
                                     modifier = Modifier.fillMaxWidth(),
-                                    label = { Text("Your name (optional)",color = Color(0xff333333)) },
+                                    label = { Text("Your name (optional)", color = Color(0xff333333)) },
                                     singleLine = true,
-                                    colors = OutlinedTextFieldDefaults.colors(Color.Black)
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedTextColor = Color.Black,
+                                        unfocusedTextColor = Color.Black,
+                                        cursorColor = Color.Black,
+                                        focusedBorderColor = Color.Black,
+                                        unfocusedBorderColor = Color.Black,
+                                        focusedLabelColor = Color.Black,
+                                        unfocusedLabelColor = Color.Black,
+                                    )
                                 )
+
 
                                 Spacer(Modifier.height(10.dp))
 
@@ -847,7 +857,7 @@ fun PlaceDetailsScreen(
                                             Icon(
                                                 imageVector = if (i <= myRating) Icons.Filled.Star else Icons.Outlined.StarBorder,
                                                 contentDescription = "Rate $i",
-                                                tint = Color(0xff333333)
+                                                tint = Color(0xffecc440)
                                             )
                                         }
                                     }
@@ -863,7 +873,15 @@ fun PlaceDetailsScreen(
                                     placeholder = { Text("What did you like? Any tips for others?") },
                                     minLines = 3,
                                     maxLines = 6,
-                                    colors = OutlinedTextFieldDefaults.colors(Color.Black)
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedTextColor = Color.Black,
+                                        unfocusedTextColor = Color.Black,
+                                        cursorColor = Color.Black,
+                                        focusedBorderColor = Color.Black,
+                                        unfocusedBorderColor = Color.Black,
+                                        focusedLabelColor = Color.Black,
+                                        unfocusedLabelColor = Color.Black,
+                                    )
                                 )
 
                                 Spacer(Modifier.height(10.dp))
@@ -871,7 +889,8 @@ fun PlaceDetailsScreen(
                                 Button(
                                     onClick = { postReview(name ?: "this place") },
                                     enabled = !mySubmitting && myRating in 1..5 && myReviewText.isNotBlank(),
-                                    modifier = Modifier.align(Alignment.End)
+                                    modifier = Modifier.align(Alignment.End),
+                                    colors = ButtonDefaults.buttonColors(Color.Transparent)
                                 ) {
                                     Text(if (mySubmitting) "Posting…" else "Post", color = Color.Black)
                                 }

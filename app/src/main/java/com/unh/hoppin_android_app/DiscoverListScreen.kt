@@ -754,6 +754,7 @@ private fun applyFiltersToSection(
 fun PlaceCardMinimal(
     place: UiPlace,
     isFavorited: Boolean,
+    removeIcon: Boolean = false,
     onClick: () -> Unit,
     onToggleFavorite: () -> Unit
 ) {
@@ -827,10 +828,12 @@ fun PlaceCardMinimal(
                     },
                     modifier = Modifier.graphicsLayer(scaleX = scale, scaleY = scale)
                 ) {
-                    if (isFavorited)
+                    if (isFavorited && !removeIcon)
                         Icon(Icons.Filled.Favorite, contentDescription = "Added", tint = Color.Red)
-                    else
+                    else if(!isFavorited && !removeIcon)
                         Icon(Icons.Outlined.FavoriteBorder, contentDescription = "Save", tint = Color.Black)
+                    else
+                        null
                 }
             }
         }
