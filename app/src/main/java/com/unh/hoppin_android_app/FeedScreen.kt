@@ -2,6 +2,7 @@ package com.unh.hoppin_android_app
 
 import android.R.attr.subtitle
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -57,10 +58,13 @@ fun FeedScreen(
                         Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
+                colors =  if(!isSystemInDarkTheme()){ TopAppBarDefaults.topAppBarColors(
                     containerColor = Color(0xfff8f0e3),
                     titleContentColor = Color(0xFF000000)
                 )
+                } else {
+                    TopAppBarDefaults.topAppBarColors()
+                }
             )
         },
         containerColor = Color.Transparent
@@ -199,7 +203,7 @@ private fun SectionHeader(
         Text(
             text = title,
             style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.SemiBold
+            fontWeight = FontWeight.SemiBold,
         )
     }
 }
@@ -223,13 +227,14 @@ private fun EmptyStateCard(
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
+                color = Color.Black
             )
             Spacer(Modifier.height(6.dp))
             Text(
                 text = message,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = Color.Black,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
         }
@@ -263,7 +268,8 @@ private fun SharedItineraryCard(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        color = Color.Black
                     )
 
                     Spacer(Modifier.height(4.dp))
@@ -273,14 +279,14 @@ private fun SharedItineraryCard(
                         Text(
                             text = "$placeCount place" + if (placeCount == 1) "" else "s",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = Color.Black
                         )
 
                         itinerary.createdAt?.let { ts ->
                             Text(
                                 text = " • " + formatShortDate(ts.toDate()),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = Color.Black
                             )
                         }
                     }
@@ -307,7 +313,8 @@ private fun SharedItineraryCard(
                     text = itinerary.description,
                     style = MaterialTheme.typography.bodyMedium,
                     maxLines = 3,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    color = Color.Black
                 )
             }
         }
@@ -354,7 +361,8 @@ private fun ReviewSnippetRow(review: CommonReview) {
             Text(
                 text = review.author.ifBlank { "Anonymous" },
                 style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
+                color = Color.Black
             )
 
             // Place name — bigger
@@ -362,7 +370,7 @@ private fun ReviewSnippetRow(review: CommonReview) {
                 Text(
                     text = "• " + review.placeName,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = Color.Black,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -376,7 +384,8 @@ private fun ReviewSnippetRow(review: CommonReview) {
                 text = review.text,
                 style = MaterialTheme.typography.bodyMedium,
                 maxLines = 4,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                color = Color.Black
             )
         }
 
@@ -386,7 +395,7 @@ private fun ReviewSnippetRow(review: CommonReview) {
             Text(
                 text = formatShortDateTime(date),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = Color.Black
             )
         }
     }

@@ -10,6 +10,7 @@ import androidx.compose.material.*
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -22,7 +23,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -38,6 +38,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.ui.graphics.Color
 
 /**
  * ChatScreen
@@ -78,10 +79,13 @@ fun ChatScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
+                colors =  if(!isSystemInDarkTheme()){ TopAppBarDefaults.topAppBarColors(
                     containerColor = Color(0xfff8f0e3),
                     titleContentColor = Color(0xFF000000)
                 )
+                } else {
+                    TopAppBarDefaults.topAppBarColors()
+                }
             )
         },
         containerColor = Color.Transparent
@@ -141,7 +145,7 @@ fun ChatScreen(
 fun MessageBubble(message: ChatMessage) {
     val isBot = message.author == Author.BOT
     val horizontalArrangement = if (isBot) Arrangement.Start else Arrangement.End
-    val bubbleColor = if (isBot) Color.White else Color.Black
+    val bubbleColor = if (isBot) Color(0xfff8f0e3) else Color.Black
     val textColor = if (isBot) Color.Black else Color.White
     AnimatedVisibility(
         visible = true,
@@ -158,7 +162,7 @@ fun MessageBubble(message: ChatMessage) {
                 Icon(
                     imageVector = Icons.Filled.SmartToy,
                     contentDescription = "Bot Avatar",
-                    tint = Color(0xff023C85),
+                    tint = Color.Black,
                     modifier = Modifier.padding(end = 8.dp)
                 )
             }
@@ -289,7 +293,7 @@ fun QuickReplies(replies: List<String>, onReplyClicked: (String) -> Unit) {
             Button(
                 onClick = { onReplyClicked(reply) },
                 shape = RoundedCornerShape(50),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.White)
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xfff8f0e3))
             ) {
                 Text(text = reply, color = Color.Black)
             }

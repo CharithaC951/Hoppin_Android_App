@@ -833,7 +833,7 @@ fun PlaceDetailsScreen(
                                     value = yourName,
                                     onValueChange = { yourName = it },
                                     modifier = Modifier.fillMaxWidth(),
-                                    label = { Text("Your name (optional)") },
+                                    label = { Text("Your name (optional)",color = Color(0xff333333)) },
                                     singleLine = true
                                 )
 
@@ -844,7 +844,8 @@ fun PlaceDetailsScreen(
                                         IconButton(onClick = { myRating = i }) {
                                             Icon(
                                                 imageVector = if (i <= myRating) Icons.Filled.Star else Icons.Outlined.StarBorder,
-                                                contentDescription = "Rate $i"
+                                                contentDescription = "Rate $i",
+                                                tint = Color(0xff333333)
                                             )
                                         }
                                     }
@@ -856,7 +857,7 @@ fun PlaceDetailsScreen(
                                     value = myReviewText,
                                     onValueChange = { myReviewText = it },
                                     modifier = Modifier.fillMaxWidth(),
-                                    label = { Text("Add your comment") },
+                                    label = { Text("Add your comment",color = Color(0xff333333)) },
                                     placeholder = { Text("What did you like? Any tips for others?") },
                                     minLines = 3,
                                     maxLines = 6

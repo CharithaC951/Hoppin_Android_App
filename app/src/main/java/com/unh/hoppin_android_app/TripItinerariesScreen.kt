@@ -2,6 +2,7 @@
 
 package com.unh.hoppin_android_app
 
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -17,6 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.unh.hoppin_android_app.ui.theme.cardColor
 import com.unh.hoppin_android_app.viewmodels.TripItinerariesViewModel
 
 @Composable
@@ -39,12 +41,19 @@ fun TripItinerariesScreen(
                     IconButton(onClick = onBack) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
                     }
+                },
+                colors =  if(!isSystemInDarkTheme()){ TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color(0xfff8f0e3),
+                    titleContentColor = Color(0xFF000000)
+                )
+                } else {
+                    TopAppBarDefaults.topAppBarColors()
                 }
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { showCreateDialog = true }) {
-                Icon(Icons.Filled.Add, contentDescription = "Create itinerary")
+            FloatingActionButton(onClick = { showCreateDialog = true }, containerColor = Color.Black) {
+                Icon(Icons.Filled.Add, contentDescription = "Create itinerary", tint=Color.White)
             }
         },
         containerColor = Color.Transparent
@@ -73,7 +82,10 @@ fun TripItinerariesScreen(
                                 .padding(horizontal = 4.dp),
                             onClick = {
                                 onOpenItinerary(itinerary.id)
-                            }
+                            },
+                            colors = CardDefaults.cardColors(
+                                containerColor = cardColor
+                            ),
                         ) {
                             Column(
                                 modifier = Modifier
@@ -89,13 +101,15 @@ fun TripItinerariesScreen(
                                         Text(
                                             text = itinerary.name,
                                             style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.SemiBold
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Color.Black
                                         )
                                         if (itinerary.description.isNotBlank()) {
                                             Spacer(Modifier.height(4.dp))
                                             Text(
                                                 text = itinerary.description,
-                                                style = MaterialTheme.typography.bodyMedium
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = Color.Black
                                             )
                                         }
                                     }
@@ -105,7 +119,8 @@ fun TripItinerariesScreen(
                                     ) {
                                         Icon(
                                             Icons.Filled.Delete,
-                                            contentDescription = "Delete itinerary"
+                                            contentDescription = "Delete itinerary",
+                                            tint = Color.Red
                                         )
                                     }
                                 }
@@ -113,7 +128,8 @@ fun TripItinerariesScreen(
                                 Spacer(Modifier.height(8.dp))
                                 Text(
                                     text = "${itinerary.placeIds.size} places saved",
-                                    style = MaterialTheme.typography.labelMedium
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = Color.Black
                                 )
                             }
                         }

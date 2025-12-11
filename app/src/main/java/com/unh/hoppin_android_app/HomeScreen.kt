@@ -284,7 +284,7 @@ private fun HomeScreenContent(
                         color = Color(0xFFE0E0E0),
                         modifier = Modifier
                             .size(48.dp)
-                            .clickable { navController.navigate("gamification") }
+                            .clickable { navController.navigate("gamification/$displayName") }
                     ) {
                         Icon(
                             imageVector = Icons.Default.Person,
@@ -385,7 +385,7 @@ private fun HomeScreenContent(
                 // Inner yellow circle with icon & click action
                 FloatingActionButton(
                     onClick = { navController.navigate("chat") },
-                    containerColor = Color(0xff023C85),  // Yellow inner circle
+                    containerColor = Color.Black,  // Yellow inner circle
                     shape = CircleShape,
                     modifier = Modifier.fillMaxSize()
                 ) {

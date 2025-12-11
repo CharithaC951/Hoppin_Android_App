@@ -328,7 +328,7 @@ private fun SignInUI(
                     .fillMaxWidth()
                     .height(50.dp),
                 shape = RoundedCornerShape(30.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF023C85))
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF333333))
             ) {
                 Text(
                     "Sign in",
@@ -397,7 +397,7 @@ private fun SignInUI(
                 .fillMaxWidth()
                 .height(50.dp),
             shape = RoundedCornerShape(30.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF023C85))
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF333333))
         ) {
             Text(
                 "Sign up",
