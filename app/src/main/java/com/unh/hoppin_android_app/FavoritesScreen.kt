@@ -2,6 +2,7 @@ package com.unh.hoppin_android_app
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -74,10 +75,13 @@ fun FavoritesScreen(
                         Icon(Icons.Filled.ArrowBack, null)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
+                colors =  if(!isSystemInDarkTheme()){ TopAppBarDefaults.topAppBarColors(
                     containerColor = Color(0xfff8f0e3),
                     titleContentColor = Color(0xFF000000)
                 )
+                } else {
+                    TopAppBarDefaults.topAppBarColors()
+                }
             )
         },
         snackbarHost = { SnackbarHost(snackbar) },
@@ -242,7 +246,8 @@ private fun FavoriteCard(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        color = Color.Black
                     )
                     place.distanceMeters?.let {
                         val label =
@@ -250,7 +255,8 @@ private fun FavoriteCard(
                             else "$it m away"
                         Text(
                             label,
-                            style = MaterialTheme.typography.bodySmall
+                            style = MaterialTheme.typography.bodySmall,
+                            color= Color.Black
                         )
                     }
                 }

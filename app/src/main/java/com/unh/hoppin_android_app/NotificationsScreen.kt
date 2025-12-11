@@ -1,6 +1,7 @@
 // In NotificationsScreen.kt
 package com.unh.hoppin_android_app
 
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -41,10 +42,13 @@ fun NotificationsScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
+                colors =  if(!isSystemInDarkTheme()){ TopAppBarDefaults.topAppBarColors(
                     containerColor = Color(0xfff8f0e3),
                     titleContentColor = Color(0xFF000000)
                 )
+                } else {
+                    TopAppBarDefaults.topAppBarColors()
+                }
             )
         },
         containerColor = Color.Transparent
@@ -85,19 +89,21 @@ fun NotificationItem(notification: AppNotification) {
             Text(
                 text = notification.title,
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                color = Color.Black
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = notification.message,
-                style = MaterialTheme.typography.bodyMedium
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.Black
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = SimpleDateFormat("MMM dd, yyyy 'at' hh:mm a", Locale.getDefault())
                     .format(notification.timestamp.toDate()),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = Color.Black
             )
         }
     }

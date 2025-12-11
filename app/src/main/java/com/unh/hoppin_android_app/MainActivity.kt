@@ -48,6 +48,7 @@ import com.unh.hoppin_android_app.viewmodels.RecommendationViewModel
 
 const val USER_NAME_ARG = "Hopper"
 const val HOME_ROUTE_PATTERN = "Home/{$USER_NAME_ARG}"
+const val GAMIFICATION_ROUTE_PATTERN = "gamification/{$USER_NAME_ARG}"
 
 class MainActivity : ComponentActivity() {
 
@@ -275,8 +276,22 @@ class MainActivity : ComponentActivity() {
                                             navController = navController
                                         )
                                     }
-                                    composable("gamification") {
-                                        GamificationScreen(navController = navController)
+                                    composable(
+                                        GAMIFICATION_ROUTE_PATTERN,
+                                        arguments = listOf(
+                                            navArgument(USER_NAME_ARG) {
+                                                type = NavType.StringType
+                                                nullable = false
+                                            }
+                                        )
+                                    ) { backStackEntry ->
+                                        val userName =
+                                            backStackEntry.arguments?.getString(USER_NAME_ARG)
+                                                ?: "Guest"
+                                        GamificationScreen(
+                                            navController = navController,
+                                            userName = userName
+                                        )
                                     }
                                     composable("chat") {
                                         val chatViewModel: ChatViewModel = viewModel()
@@ -460,8 +475,22 @@ class MainActivity : ComponentActivity() {
                                         navController = navController
                                     )
                                 }
-                                composable("gamification") {
-                                    GamificationScreen(navController = navController)
+                                composable(
+                                    GAMIFICATION_ROUTE_PATTERN,
+                                    arguments = listOf(
+                                        navArgument(USER_NAME_ARG) {
+                                            type = NavType.StringType
+                                            nullable = false
+                                        }
+                                    )
+                                ) { backStackEntry ->
+                                    val userName =
+                                        backStackEntry.arguments?.getString(USER_NAME_ARG)
+                                            ?: "Guest"
+                                    GamificationScreen(
+                                        navController = navController,
+                                        userName = userName
+                                    )
                                 }
                                 composable("chat") {
                                     val chatViewModel: ChatViewModel = viewModel()

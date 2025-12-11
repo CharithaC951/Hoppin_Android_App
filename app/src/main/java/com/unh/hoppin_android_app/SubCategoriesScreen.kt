@@ -4,6 +4,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -64,10 +65,13 @@ fun SubCategoriesScreen(
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
+                colors =  if(!isSystemInDarkTheme()){ TopAppBarDefaults.topAppBarColors(
                     containerColor = Color(0xfff8f0e3),
                     titleContentColor = Color(0xFF000000)
                 )
+                } else {
+                    TopAppBarDefaults.topAppBarColors()
+                }
             )
         },
         containerColor = Color.Transparent

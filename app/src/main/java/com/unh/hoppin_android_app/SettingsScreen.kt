@@ -1,15 +1,12 @@
 package com.unh.hoppin_android_app
-import androidx.compose.foundation.Image
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
-import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -18,7 +15,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.TravelExplore
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -116,10 +112,13 @@ fun SettingsScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
+                colors =  if(!isSystemInDarkTheme()){ TopAppBarDefaults.topAppBarColors(
                     containerColor = Color(0xfff8f0e3),
                     titleContentColor = Color(0xFF000000)
                 )
+                } else {
+                    TopAppBarDefaults.topAppBarColors()
+                }
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -156,7 +155,7 @@ fun SettingsScreen(
             Button(
                 onClick = { settingsViewModel.logOut() },
                 shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xff023C85)),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xff36454f)),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp)
@@ -188,10 +187,11 @@ fun ChangePasswordSection(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text("Change Password", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Text("Change Password", fontWeight = FontWeight.Bold, fontSize = 16.sp,color = Color.Black)
             Icon(
                 imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                contentDescription = "Expand or collapse"
+                contentDescription = "Expand or collapse",
+                tint = Color.Black
             )
         }
 
@@ -201,7 +201,7 @@ fun ChangePasswordSection(
                     .fillMaxWidth()
                     .padding(top = 8.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Color.White)
+                    .background(Color(0xfff8f0e3))
                     .background(Color.LightGray.copy(alpha = 0.2f))
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -226,7 +226,7 @@ fun ChangePasswordSection(
                     onClick = { onUpdatePassword(currentPassword, newPassword) },
                     enabled = !isLoading,
                     shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(    0xff333333)),
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(50.dp)
@@ -257,7 +257,7 @@ fun NotificationSettingsSection(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text("Enable/Disable Notifications", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        Text("Enable/Disable Notifications", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.Black)
         Switch(
             checked = isEnabled,
             onCheckedChange = onToggle
@@ -282,10 +282,11 @@ fun ContactUsSection() {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text("Contact us", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Text("Contact us", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.Black)
             Icon(
                 imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                contentDescription = "Expand or collapse"
+                contentDescription = "Expand or collapse",
+                tint = Color.Black
             )
         }
 
@@ -295,11 +296,11 @@ fun ContactUsSection() {
                     .fillMaxWidth()
                     .padding(top = 8.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Color.White)
+                    .background(Color(0xfff8f0e3))
                     .padding(16.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Text("hoppinsupport@email.com", fontSize = 16.sp)
+                Text("hoppinsupport@email.com", fontSize = 16.sp, color= Color.Black)
             }
         }
     }
@@ -327,7 +328,8 @@ private fun TripItinerariesRow(
             Text(
                 text = "Trip Itineraries",
                 fontWeight = FontWeight.Bold,
-                fontSize = 16.sp
+                fontSize = 16.sp,
+                color = Color.Black
             )
         }
     }

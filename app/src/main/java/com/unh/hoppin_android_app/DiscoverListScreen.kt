@@ -7,6 +7,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -336,10 +337,13 @@ fun DiscoverListScreen(
                         Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
+                colors =  if(!isSystemInDarkTheme()){ TopAppBarDefaults.topAppBarColors(
                     containerColor = Color(0xfff8f0e3),
                     titleContentColor = Color(0xFF000000)
                 )
+                } else {
+                    TopAppBarDefaults.topAppBarColors()
+                },
             )
         },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
@@ -805,12 +809,14 @@ fun PlaceCardMinimal(
                         place.title,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        color = Color.Black
                     )
                     place.distanceMeters?.let {
                         Text(
                             formatDistanceImperial(it),
-                            style = MaterialTheme.typography.bodySmall
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.Black
                         )
                     }
                 }
@@ -824,7 +830,7 @@ fun PlaceCardMinimal(
                     if (isFavorited)
                         Icon(Icons.Filled.Favorite, contentDescription = "Added", tint = Color.Red)
                     else
-                        Icon(Icons.Outlined.FavoriteBorder, contentDescription = "Save")
+                        Icon(Icons.Outlined.FavoriteBorder, contentDescription = "Save", tint = Color.Black)
                 }
             }
         }
